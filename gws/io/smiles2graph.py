@@ -88,7 +88,7 @@ def smiles2graph(smiles_string, aromatic=0):
 
     aind = np.zeros((2 * len(atom)), dtype='object')
     for i in range(len(auniq)):
-        k = [i for i in range(len(smiles_string.upper())) if smiles_string.upper().startswith(auniq[i].upper(), i)]
+        k = [j for j in range(len(smiles_string.upper())) if smiles_string.upper().startswith(auniq[i].upper(), j)]
         ind[cnt:(cnt + len(k))] = k
         aind[cnt:(cnt + len(k))] = auniq[i]
         cnt += len(k)

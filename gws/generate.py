@@ -21,6 +21,7 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
     for i in range(1, num_iter):
         nl_m = []
         nl_s = []
+        nl_f = []
         for j in range(len(curr_m)):
             poih = curr_m[j]['poih']
             poia = curr_m[j]['poia']
@@ -29,8 +30,11 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
             # generate_1
             molh, mola = generate_1(curr_m[j], invh, inva, adds)
             # cut
+            # cut
             if is_test == 0:
-                nl_m, nl_s = gk.graph_kernel(nl_m, nl_s, molh + mola, gk_param)
+                l_tmp = molh + mola
+                if len(l_tmp) > 0:
+                    nl_m, nl_s, nl_f = gk.graph_kernel(nl_m, nl_s, nl_f, l_tmp, gk_param)
             else:
                 nl_m, nl_s = unconcat(nl_m, nl_s, molh, mola)
         curr_m = nl_m

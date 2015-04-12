@@ -1,7 +1,7 @@
 ﻿# coding=utf-8
 import os
 import sys
-
+import timeit
 ROOT_PATH = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -61,22 +61,24 @@ def run():
     gk_param = gk.get_def_par()
     gk_param['p'] = 0.9999
     # Проверка на изоморфизм через GK
-    list_mols, list_mols_smiles = g.generate(3, frame, adds, gk_param=gk_param)  # Генерация первого поколения молекул.
+    n = 3  # Количество добовляемых аттачей
+    start_time = timeit.default_timer()
+    list_mols, list_mols_smiles = g.generate(n, frame, adds, gk_param=gk_param)  # Генерация первого поколения молекул.
                                                                 #  К аттачам/инсертам здесь ничего не добавляется
+    print 'GK time = ' + str(timeit.default_timer() - start_time)
     # Честная проверка
-    list_mols_a, list_mols_smiles_a = g.generate(3, frame, adds, 1)
-
+    start_time = timeit.default_timer()
+    list_mols_a, list_mols_smiles_a = g.generate(n, frame, adds, 1)
+    print 'Fair isomorphism time = ' + str(timeit.default_timer() - start_time)
     print len(list_mols_smiles), len(list_mols_smiles_a)
     print (list_mols_smiles)  # изоморфизм через GK
     print (list_mols_smiles_a)  # изоморфизм честный
 
     new_frame_mol = list_mols[-1]  # Выбираем в качестве нового фрейма ранее сгенерированную молекулу
-    adds_smiles = {'attach': ['-{NC}'], 'names_at': ['n3'], 'insert': ['{NO}'], 'names_in': ['n4']}  # Задаем новые аттачи
+    adds_smiles = {'attach': ['-{NC}'], 'names_at': ['n3'], 'insert': ['{NO}', '{COC}'], 'names_in': ['n4', 'n5']}  # Задаем новые аттачи
     adds = gd.data_prep_adds(adds_smiles)  # Преобразовываем аттачи в молекулы
 
     list_mols_second_gen, list_mols_smiles_second_gen = g.generate(2, new_frame_mol, adds)  # Генерируем молекулы второго поколения
-
-    print list_mols_smiles
     print list_mols_smiles_second_gen
 
 

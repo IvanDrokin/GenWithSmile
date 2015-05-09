@@ -80,13 +80,12 @@ def star_smiles2smiles(star_smiles):
     # паттерны для определения помеченных атомов в порядке их поиска в star_smiles
     # в формате (pattern, is_replace, is_append)
     tokens = [
-        ('\*\*\*',                 True,  True),   # ***
-        ('\{[a-zA-Z0-9=#]*\}\*\*', False, True),   # {atoms}**
-        ('\{[a-zA-Z0-9=#]*\}\*',   True,  False),  # {atoms}*
-        # ?? не очень понятно, для чего строка ниже:
-        ('\{[a-z|A-Z|0-9|=|#]*\}', True,  True),   # {atoms}
-        ('\*\*',                   False, True),   # **
-        ('\*',                     True,  False)   # *
+        ('\*\*\*',      True,  True),   # ***
+        ('\{.*?\}\*\*', False, True),   # {atoms}**
+        ('\{.*?\}\*',   True,  False),  # {atoms}*
+        ('\{.*?\}',     True,  True),   # {atoms}
+        ('\*\*',        False, True),   # **
+        ('\*',          True,  False)   # *
     ]
 
     for pattern, is_replace, is_append in tokens:
@@ -101,48 +100,55 @@ def star_smiles2smiles(star_smiles):
 
 def token_proc(smiles, pattern, inda, indh):
     """
-    TODO docs
+    smiles: строка в формате star_smiles
+    pattern: паттерн для разбора формата star_smiles
+
+    Возвращает упрощение строки star_smiles в формате, 
+    в котором уже больше не встречается pattern, плюс индексы, 
+    атомы на которых следует добавить в соответствующее множество
+
+    Паттерн может иметь вид (упрощённо) *+ или {...}*+
     """
+
+    simple_case = '\{' not in pattern
+    match_shift = pattern.count('\*') + (0 if simple_case else 2)  # 2 за счёт скобок {}
     indexes = []
     offset = 0
 
-    advanced_case = '\{' in pattern
-
-    if not advanced_case:
-        for match in re.finditer(pattern, smiles):
-            ind_a = match.start() - 1 - offset
-            indexes.append(ind_a)
-            smiles = smiles[:ind_a + 1] + smiles[match.end() - offset:]
-            offset += match.end() - match.start()
-       
-            for l, p in enumerate(inda):
-                if p > match.end():
-                    inda[l] -= match.end() - match.start()
-            for l, p in enumerate(indh):
-                if p > match.end():
-                    indh[l] -= match.end() - match.start()
-        return smiles, indexes
-
-    num_stars = pattern.count('\*')
-
     for match in re.finditer(pattern, smiles):
-        start_pos = match.start() + 1 - offset
-        end_pos = match.end() - 2 - num_stars - offset
+        real_start = match.start() - offset
+        real_end = match.end() - offset
 
-        indexes.extend(xrange(start_pos - 1, end_pos))
+        if simple_case:
+            smiles = smiles[:real_start] + smiles[real_end:]
+            # Позиция перед началом серии звёзд должна попадать на конец описания атома
+            indexes.append(real_start - 1)
+        else:
+            # Исключаем {, } и звёзды после }:
+            smiles = (smiles[:real_start] + 
+                      smiles[real_start + 1 : real_end - match_shift + 1] +  
+                      smiles[real_end:])
+            # Добавляем позиции, оказавшиеся в {}, с учётом сдвига
+            indexes.extend(xrange(real_start, real_end - match_shift))
 
-        smiles = (smiles[:match.start()] +
-                  smiles[match.start() + 1 : match.end() - 1 - num_stars] +
-                  smiles[match.end() - offset:])
-
-        offset += (2 + num_stars)
-        for l, p in enumerate(inda):
-            if p > match.end():
-                inda[l] -= 2 + num_stars
-        for l, p in enumerate(indh):
-            if p > match.end():
-                indh[l] -= 2 + num_stars
+        offset += match_shift
+        _shift_values_greater(inda, match.end(), -match_shift)
+        _shift_values_greater(indh, match.end(), -match_shift)
     return smiles, indexes
+
+
+def _shift_values_greater(values, threshold, shift):
+    """
+    values: список, значения котором будут изменяться
+    threshold: пороговое значение
+    shift: величина сдвига
+
+    Все значения списка values, большие threshold, будут изменены на shift
+    """
+    for i, value in enumerate(values):
+        if value > threshold:
+            values[i] += shift
+
 
 
 def check_single_atom(smiles):

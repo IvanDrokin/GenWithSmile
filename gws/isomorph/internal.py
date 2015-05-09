@@ -42,6 +42,6 @@ def mol2nxgraph(adj, atom):
             if a1b[i, j] > 0:
                 g1.add_edge(i, j, weight=a1b[i, j], label='-')
     for i in range(n):
-        g1.node[i]['lable'] = a1[i]
+        g1.node[i]['label'] = a1[i]
 
     return g1

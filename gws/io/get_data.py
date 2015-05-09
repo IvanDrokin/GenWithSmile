@@ -1,3 +1,4 @@
+# encoding: utf-8
 import re
 import numpy as np
 
@@ -68,79 +69,80 @@ def data_prep_adds(adds):
 
 
 def star_smiles2smiles(star_smiles):
-
+    """
+    Принимает на вход строку в формате star_smiles
+    возвращает строку smiles и списки атомов для замены и добавления
+    """
     smiles = star_smiles
     indh = []
     inda = []
-    token = '\*\*\*'
-    smiles, ind = token_proc(smiles, token, inda, indh)
-    inda += ind
-    indh += ind
 
-    token = '\{' + '[a-z|A-Z|0-9|=|#]*' + '\}\*\*'
-    smiles, ind = token_proc(smiles, token, inda, indh, 1, 2)
-    inda += ind
+    # паттерны для определения помеченных атомов в порядке их поиска в star_smiles
+    # в формате (pattern, is_replace, is_append)
+    tokens = [
+        ('\*\*\*',                 True,  True),   # ***
+        ('\{[a-zA-Z0-9=#]*\}\*\*', False, True),   # {atoms}**
+        ('\{[a-zA-Z0-9=#]*\}\*',   True,  False),  # {atoms}*
+        # ?? не очень понятно, для чего строка ниже:
+        ('\{[a-z|A-Z|0-9|=|#]*\}', True,  True),   # {atoms}
+        ('\*\*',                   False, True),   # **
+        ('\*',                     True,  False)   # *
+    ]
 
-    token = '\{' + '[a-z|A-Z|0-9|=|#]*' + '\}\*'
-    smiles, ind = token_proc(smiles, token, inda, indh, 1, 1)
-    indh += ind
-
-    token = '\{' + '[a-z|A-Z|0-9|=|#]*' + '\}'
-    smiles, ind = token_proc(smiles, token, inda, indh, 1)
-    inda += ind
-    indh += ind
-
-    token = '\*\*'
-    smiles, ind = token_proc(smiles, token, inda, indh)
-    inda += ind
-
-    token = '\*'
-    smiles, ind = token_proc(smiles, token, inda, indh)
-    indh += ind
+    for pattern, is_replace, is_append in tokens:
+        smiles, ind = token_proc(smiles, pattern, inda, indh)
+        if is_replace:
+            indh += ind
+        if is_append:
+            inda += ind
 
     return smiles, inda, indh
 
 
-def token_proc(smiles, token, inda, indh, case=0, num_stars=0):
+def token_proc(smiles, pattern, inda, indh):
     """
     TODO docs
     """
-    if case == 0:
-        matches = re.finditer(token, smiles)
-        ind = []
-        offset = 0
-        for match in matches:
+    indexes = []
+    offset = 0
+
+    advanced_case = '\{' in pattern
+
+    if not advanced_case:
+        for match in re.finditer(pattern, smiles):
             ind_a = match.start() - 1 - offset
-            ind.append(ind_a)
-            smiles = smiles[0:(ind_a+1)] + smiles[(match.end() - offset):]
+            indexes.append(ind_a)
+            smiles = smiles[:ind_a + 1] + smiles[match.end() - offset:]
             offset += match.end() - match.start()
+       
             for l, p in enumerate(inda):
                 if p > match.end():
-                    inda[l] -= (match.end() - match.start())
+                    inda[l] -= match.end() - match.start()
             for l, p in enumerate(indh):
                 if p > match.end():
-                    indh[l] -= (match.end() - match.start())
-        return smiles, ind
+                    indh[l] -= match.end() - match.start()
+        return smiles, indexes
 
-    matches = re.finditer(token, smiles)
-    ind = []
-    offset = 0
-    for match in matches:
-        ind_a = match.start() + 1 - offset
-        ind_b = match.end() - 2 - num_stars - offset
-        for j in range(ind_a, ind_b + 1):
-            ind.append(j - 1)
-        smiles = (smiles[0:(match.start())] + 
-                  smiles[(match.start()+1):(match.end() - 1 - num_stars)] +
-                  smiles[(match.end() - offset):])
+    num_stars = pattern.count('\*')
+
+    for match in re.finditer(pattern, smiles):
+        start_pos = match.start() + 1 - offset
+        end_pos = match.end() - 2 - num_stars - offset
+
+        indexes.extend(xrange(start_pos - 1, end_pos))
+
+        smiles = (smiles[:match.start()] +
+                  smiles[match.start() + 1 : match.end() - 1 - num_stars] +
+                  smiles[match.end() - offset:])
+
         offset += (2 + num_stars)
         for l, p in enumerate(inda):
             if p > match.end():
-                inda[l] -= (2 + num_stars)
+                inda[l] -= 2 + num_stars
         for l, p in enumerate(indh):
             if p > match.end():
-                indh[l] -= (2 + num_stars)
-    return smiles, ind
+                indh[l] -= 2 + num_stars
+    return smiles, indexes
 
 
 def check_single_atom(smiles):

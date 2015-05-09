@@ -102,43 +102,44 @@ def star_smiles2smiles(star_smiles):
 
 
 def token_proc(smiles, token, inda, indh, case=0, num_stars=0):
+    """
+    TODO docs
+    """
     if case == 0:
-        s1 = re.finditer(token, smiles)
+        matches = re.finditer(token, smiles)
         ind = []
-        cnt = 0
-        off = 0
-        for i in s1:
-            ind_a = i.start() - 1 - off
+        offset = 0
+        for match in matches:
+            ind_a = match.start() - 1 - offset
             ind.append(ind_a)
-            cnt += 1
-            smiles = smiles[0:(ind_a+1)] + smiles[(i.end() - off):]
-            off += i.end() - i.start()
+            smiles = smiles[0:(ind_a+1)] + smiles[(match.end() - offset):]
+            offset += match.end() - match.start()
             for l, p in enumerate(inda):
-                if p > i.end():
-                    inda[l] -= (i.end() - i.start())
+                if p > match.end():
+                    inda[l] -= (match.end() - match.start())
             for l, p in enumerate(indh):
-                if p > i.end():
-                    indh[l] -= (i.end() - i.start())
-    else:
-        s1 = re.finditer(token, smiles)
-        ind = []
-        cnt = 0
-        off = 0
-        for i in s1:
-            ind_a = i.start() + 1 - off
-            ind_b = i.end() - 2 - num_stars - off
-            for j in range(ind_a, ind_b + 1):
-                ind.append(j - 1)
-            cnt += 1
-            smiles = smiles[0:(i.start())] + smiles[(i.start()+1):(i.end() - 1 - num_stars)] +\
-                smiles[(i.end() - off):]
-            off += (2 + num_stars)
-            for l, p in enumerate(inda):
-                if p > i.end():
-                    inda[l] -= (2 + num_stars)
-            for l, p in enumerate(indh):
-                if p > i.end():
-                    indh[l] -= (2 + num_stars)
+                if p > match.end():
+                    indh[l] -= (match.end() - match.start())
+        return smiles, ind
+
+    matches = re.finditer(token, smiles)
+    ind = []
+    offset = 0
+    for match in matches:
+        ind_a = match.start() + 1 - offset
+        ind_b = match.end() - 2 - num_stars - offset
+        for j in range(ind_a, ind_b + 1):
+            ind.append(j - 1)
+        smiles = (smiles[0:(match.start())] + 
+                  smiles[(match.start()+1):(match.end() - 1 - num_stars)] +
+                  smiles[(match.end() - offset):])
+        offset += (2 + num_stars)
+        for l, p in enumerate(inda):
+            if p > match.end():
+                inda[l] -= (2 + num_stars)
+        for l, p in enumerate(indh):
+            if p > match.end():
+                indh[l] -= (2 + num_stars)
     return smiles, ind
 
 

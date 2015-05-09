@@ -2,17 +2,14 @@
 import re
 import numpy as np
 
-from gws.io import smiles2graph as s2g
+from collections import namedtuple
+from gws.io.smiles2graph import smiles2graph
 
 
 def data_prep_frame(frame_smiles):
 
     smiles, poia, poih = star_smiles2smiles(frame_smiles)
-    frame_mol = check_single_atom(smiles)
-    if frame_mol['check'] == -1:
-        frame_mol = s2g.smiles2graph(smiles)
-    else:
-        frame_mol.__delitem__('check')
+    frame_mol = single_atom_to_graph(smiles) or smiles2graph(smiles)
 
     atom_pos = frame_mol['atom_pos']
     ind_atoms = np.zeros(len(poia), dtype=int)
@@ -150,34 +147,37 @@ def _shift_values_greater(values, threshold, shift):
             values[i] += shift
 
 
+def single_atom_to_graph(atom):
+    """
+    Если atom совпадает с одним из списка atom_data, 
+    то есть возможность быстро преобразовать его в граф
 
-def check_single_atom(smiles):
-    if smiles == 'C':
-        mol = {'g': np.zeros((1, 1)), 'gh': np.ones((1, 4)), 'atom': np.array(['C'], dtype='|S1'),
-               'atom_pos': np.zeros((1, 2), dtype=int),
-               'hb': np.zeros((1, 1)), 'sb': np.array([0]), 'charge': np.array([0]),
-               'poia': np.zeros((1, 1), dtype=int),
-               'poih': np.zeros((1, 1), dtype=int), 'smiles': 'C', 'check': 1}
-    elif smiles == 'N':
-        mol = {'g': np.zeros((1, 1)), 'gh': np.ones((1, 3)), 'atom': np.array(['N'], dtype='|S1'),
-               'atom_pos': np.zeros((1, 2), dtype=int),
-               'hb': np.zeros((1, 1)), 'sb': np.array([0]), 'charge': np.array([0]),
-               'poia': np.zeros((1, 1), dtype=int),
-               'poih': np.zeros((1, 1), dtype=int), 'smiles': 'N', 'check': 1}
-    elif smiles == 'Cl':
-        mol = {'g': np.zeros((1, 1)), 'gh': np.ones((1, 1)), 'atom': np.array(['Cl'], dtype='|S1'),
-               'atom_pos': np.zeros((1, 2), dtype=int),
-               'hb': np.zeros((1, 1)), 'sb': np.array([0]), 'charge': np.array([0]),
-               'poia': np.zeros((1, 1), dtype=int),
-               'poih': np.zeros((1, 1), dtype=int), 'smiles': 'Cl', 'check': 1}
-        mol['atom_pos'][0, 1] = 1
-    elif smiles == 'O':
-        mol = {'g': np.zeros((1, 1)), 'gh': np.ones((1, 2)), 'atom': np.array(['O'], dtype='|S1'),
-               'atom_pos': np.zeros((1, 2), dtype=int),
-               'hb': np.zeros((1, 1)), 'sb': np.array([0]), 'charge': np.array([0]),
-               'poia': np.zeros((1, 1), dtype=int),
-               'poih': np.zeros((1, 1), dtype=int), 'smiles': 'O', 'check': 1}
-    else:
-        mol = {'check': -1}
+    Возвращает граф, если условия выполнены, иначе возвращает None
+    """
+    AtomData = namedtuple('AtomData', ['valence'])
 
-    return mol
+    atom_data = {
+        'C':  AtomData(valence=4),
+        'N':  AtomData(valence=3),
+        'Cl': AtomData(valence=1),
+        'O':  AtomData(valence=2),
+    }
+
+    if atom not in atom_data:
+        return
+
+    data = atom_data[atom]
+    mol_data = {
+        'g': np.array([[0]]),
+        'gh': np.ones((1, data.valence), dtype=int),
+        'atom': np.array([atom]),
+        'atom_pos': np.array([[0, len(atom) - 1]]),
+        'hb': np.array([[0]]),
+        'sb': np.array([0]),
+        'charge': np.array([0]),
+        'poia': np.array([[0]]),
+        'poih': np.array([[0]]),
+        'smiles': atom
+    }
+
+    return mol_data

@@ -1,18 +1,21 @@
-﻿# coding=utf-8
-import os
+#!/usr/bin/env python
+# coding=utf-8
+from __future__ import print_function
 import sys
+
+if sys.version_info[:2] != (2, 7):
+    print('Error: Python 2.7 is required ({}.{} detected).'.format(*sys.version_info[0:2]))
+    sys.exit(-1)
+
+
 import timeit
-ROOT_PATH = os.path.dirname(os.path.realpath(__file__))
+
+from gws import generate as g
+from gws.io import get_data as gd
+from gws.isomorph import graph_kernel as gk
 
 
-def prepare():
-    if sys.version_info[:2] != (2, 7):
-        print("Error: Python 2.7 is required (%d.%d detected)." % (sys.version_info[0], sys.version_info[1]))
-        sys.exit(-1)
-    sys.path.insert(0, ROOT_PATH)
-
-
-def run():
+def main():
     '''
     В данном примере продемонстрирована последовательность генерации малых молекул
     Каждая молекула описывается словарем
@@ -65,31 +68,22 @@ def run():
     start_time = timeit.default_timer()
     list_mols, list_mols_smiles = g.generate(n, frame, adds, gk_param=gk_param)  # Генерация первого поколения молекул.
                                                                 #  К аттачам/инсертам здесь ничего не добавляется
-    print 'GK time = ' + str(timeit.default_timer() - start_time)
+    print('GK time = {}'.format(timeit.default_timer() - start_time))
     # Честная проверка
     start_time = timeit.default_timer()
     list_mols_a, list_mols_smiles_a = g.generate(n, frame, adds, 1)
-    print 'Fair isomorphism time = ' + str(timeit.default_timer() - start_time)
-    print len(list_mols_smiles), len(list_mols_smiles_a)
-    print (list_mols_smiles)  # изоморфизм через GK
-    print (list_mols_smiles_a)  # изоморфизм честный
+    print('Fair isomorphism time = {}'.format(timeit.default_timer() - start_time))
+    print(len(list_mols_smiles), len(list_mols_smiles_a))
+    print(list_mols_smiles)  # изоморфизм через GK
+    print(list_mols_smiles_a)  # изоморфизм честный
 
     new_frame_mol = list_mols[-1]  # Выбираем в качестве нового фрейма ранее сгенерированную молекулу
     adds_smiles = {'attach': ['-{NC}'], 'names_at': ['n3'], 'insert': ['{NO}', '{COC}'], 'names_in': ['n4', 'n5']}  # Задаем новые аттачи
     adds = gd.data_prep_adds(adds_smiles)  # Преобразовываем аттачи в молекулы
 
     list_mols_second_gen, list_mols_smiles_second_gen = g.generate(2, new_frame_mol, adds)  # Генерируем молекулы второго поколения
-    print list_mols_smiles_second_gen
-
-
-def main():
-    run()
+    print(list_mols_smiles_second_gen)
 
 
 if __name__ == "__main__":
-    prepare()
-
-    from gws import generate as g
-    from gws.io import get_data as gd
-    from gws.isomorph import graph_kernel as gk
     main()

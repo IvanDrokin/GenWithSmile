@@ -55,7 +55,7 @@ def _get_interest_atom_indexes(all_atom_positions, positions):
     return np.unique(atom_indexes)
 
 
-def data_prep_adds(adds):
+def data_prep_addons(adds):
     """
     TODO docs
     """

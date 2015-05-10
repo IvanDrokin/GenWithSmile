@@ -1,7 +1,6 @@
 numpy
 scipy
 scikit-learn
-python-igraph
 networkx
-pyper
+rdkit
 -e git+https://github.com/fabriziocosta/EDeN.git#egg=eden

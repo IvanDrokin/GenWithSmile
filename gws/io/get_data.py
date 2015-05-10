@@ -2,6 +2,7 @@
 import re
 import numpy as np
 
+from itertools import izip
 from collections import namedtuple
 from gws.io.smiles2graph import smiles2graph
 
@@ -55,34 +56,33 @@ def _get_interest_atom_indexes(all_atom_positions, positions):
 
 
 def data_prep_adds(adds):
-    adds_smiles_in = adds['insert']
-    adds_smiles_at = adds['attach']
-    adds_names_in = adds['names_in']
-    adds_names_at = adds['names_at']
-    adds_mol_in = []
-    for i in range(len(adds_smiles_in)):
-        sm = adds_smiles_in[i]
-        mol = data_prep_frame(sm)
-        mol['name'] = adds_names_in[i]
-        adds_mol_in += [mol]
+    """
+    TODO docs
+    """
+    smiles_replaces = adds['insert']
+    smiles_appenders = adds['attach']
+    names_replaces = adds['names_in']
+    names_appenders = adds['names_at']
 
-    adds_mol_at = []
-    for i in range(len(adds_smiles_at)):
-        bound = adds_smiles_at[i][0]
-        if bound == '-':
-            bound = 1
-        elif bound == '-':
-            bound = 2
-        elif bound == '-':
-            bound = 3
-        sm = adds_smiles_at[i][1:]
-        mol = data_prep_frame(sm)
-        mol['bound'] = bound
-        mol['name'] = adds_names_at[i]
-        adds_mol_at += [mol]
+    mol_replaces = []
+    for smiles, name in izip(smiles_replaces, names_replaces):
+        mol = data_prep_frame(smiles)
+        mol['name'] = name
+        mol_replaces.append(mol)
 
-    adds_mol = {'insert': adds_mol_in, 'attach': adds_mol_at}
-    return adds_mol
+    mol_appenders = []
+    for app_smiles, name in izip(smiles_appenders, names_appenders):
+        start_bond, smiles = app_smiles[0], app_smiles[1:]
+        bond_multiplexity = { '-': 1, '=': 2, '#': 3 }
+        mol = data_prep_frame(smiles)
+        mol['bound'] = bond_multiplexity[start_bond]
+        mol['name'] = name
+        mol_appenders.append(mol)
+
+    return {
+        'insert': mol_replaces, 
+        'attach': mol_appenders
+    }
 
 
 def star_smiles2smiles(star_smiles):

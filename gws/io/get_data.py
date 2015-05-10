@@ -7,32 +7,18 @@ from collections import namedtuple
 from gws.io.smiles2graph import smiles2graph
 
 
-def data_prep_frame(star_smiles):
+def star_smiles_to_mol(star_smiles):
     """
-    star_smiles: строка в формате star_smiles
-    Возвращаем граф-словарь, описывающий молекулу:
-
-        g:        основной граф
-        gh:       граф водорода
-        atom:     список атомов (по типам)
-        atom_pos: адреса атомов в smiles: [start end]
-        hb:       матрица хиральных связей
-        sb:       список атомов, у которых связи будут жесткими
-        charge:   массив зарядов атомов
-        poia:     доступные точки для инсертов
-        poih:     доступные точки для аттачей
-        smiles:   исходный smiles
-        poia_add:
-        poih_add:
-        history:
+    star_smiles: строка в формате star-smiles
+    return: граф в виде словаря, описывающего молекулу.
     """
-    smiles, replaced_atoms, appended_atoms = star_smiles2smiles(star_smiles)
+    smiles, insert_atoms, attach_atoms = star_smiles_to_smiles(star_smiles)
     frame_mol = single_atom_to_graph(smiles) or smiles2graph(smiles)
 
     atom_pos = frame_mol['atom_pos']
     
-    frame_mol['poia'] = _get_interest_atom_indexes(atom_pos, replaced_atoms)
-    frame_mol['poih'] = _get_interest_atom_indexes(atom_pos, appended_atoms)
+    frame_mol['poia'] = _get_interest_atom_indexes(atom_pos, insert_atoms)
+    frame_mol['poih'] = _get_interest_atom_indexes(atom_pos, attach_atoms)
     frame_mol['poia_add'] = []
     frame_mol['poih_add'] = []
     frame_mol['history'] = []
@@ -44,8 +30,8 @@ def _get_interest_atom_indexes(all_atom_positions, positions):
     all_atom_positions: массив отрезков [start, end]
     positions: интересующие концы отрезков
 
-    Возвращается массив индексов отрезков, чей конец является ближайшим 
-    к какому-то элементу из списка positions
+    return: массив индексов отрезков, чей конец является ближайшим 
+              к какому-то элементу из списка positions
     """
     atom_indexes = np.zeros_like(positions)
     for i, pos in enumerate(positions):
@@ -66,7 +52,7 @@ def data_prep_addons(adds):
 
     mol_replaces = []
     for smiles, name in izip(smiles_replaces, names_replaces):
-        mol = data_prep_frame(smiles)
+        mol = star_smiles_to_mol(smiles)
         mol['name'] = name
         mol_replaces.append(mol)
 
@@ -74,7 +60,7 @@ def data_prep_addons(adds):
     for app_smiles, name in izip(smiles_appenders, names_appenders):
         start_bond, smiles = app_smiles[0], app_smiles[1:]
         bond_multiplexity = { '-': 1, '=': 2, '#': 3 }
-        mol = data_prep_frame(smiles)
+        mol = star_smiles_to_mol(smiles)
         mol['bound'] = bond_multiplexity[start_bond]
         mol['name'] = name
         mol_appenders.append(mol)
@@ -85,66 +71,70 @@ def data_prep_addons(adds):
     }
 
 
-def star_smiles2smiles(star_smiles):
+def star_smiles_to_smiles(star_smiles):
     """
-    Принимает на вход строку в формате star_smiles
+    star_smiles: строка в формате star-smiles
 
-    * помечает атом, к которому присоединяется радикал
-    ** помечает атом, который заменяется на другой
-    *** помечает двумя типами
+    Обозначения формата star-smiles:
+      * помечает атом, к которому присоединяется радикал
+      ** помечает атом, который заменяется на другой
+      *** помечает двумя типами
 
-    Можно помечать группу атомов сразу:
-    {...}* или {...}**
+      Можно помечать группу атомов сразу:
+        {...}* или {...}**
 
-    Запись {...} означает, что атомы внутри {} помечены ***.
+      Запись {...} означает, что атомы внутри {} помечены ***.
 
-    Возвращает строку smiles и списки атомов для замены и добавления
+    return: строку в формате SMILES и списки атомов инсертов и аттачей
     """
     smiles = star_smiles
-    appended_atoms = []
-    replaced_atoms = []
+    attach_atoms = []
+    insert_atoms = []
 
-    # паттерны для определения помеченных атомов в порядке их поиска в star_smiles
+    # паттерны для определения помеченных атомов в порядке их поиска в star-smiles
     # в формате (pattern, type)
 
     # типы:
-    APPEND = 0b01
-    REPLACE = 0b10
-    BOTH = APPEND | REPLACE
+    ATTACH = 0b01
+    INSERT = 0b10
+    ADDON = ATTACH | INSERT
 
     tokens = [
-        ('\*\*\*',      BOTH),    # ***
-        ('\{.*?\}\*\*', REPLACE), # {atoms}**
-        ('\{.*?\}\*',   APPEND),  # {atoms}*
-        ('\{.*?\}',     BOTH),    # {atoms}
-        ('\*\*',        REPLACE), # **
-        ('\*',          APPEND)   # *
+        ('\*\*\*',      ADDON),   # ***
+        ('\{.*?\}\*\*', INSERT),  # {atoms}**
+        ('\{.*?\}\*',   ATTACH),  # {atoms}*
+        ('\{.*?\}',     ADDON),   # {atoms}
+        ('\*\*',        INSERT),  # **
+        ('\*',          ATTACH)   # *
     ]
 
     for pattern, type_ in tokens:
-        smiles, ind = token_proc(smiles, pattern, appended_atoms, replaced_atoms)
-        if type_ & APPEND:
-            appended_atoms += ind
-        if type_ & REPLACE:
-            replaced_atoms += ind
+        smiles, ind = token_proc(smiles, pattern, attach_atoms, insert_atoms)
+        if type_ & ATTACH:
+            attach_atoms += ind
+        if type_ & INSERT:
+            insert_atoms += ind
 
-    return smiles, replaced_atoms, appended_atoms
+    return smiles, insert_atoms, attach_atoms
 
 
-def token_proc(smiles, pattern, appended_atoms, replaced_atoms):
+def token_proc(smiles, pattern, attach_atoms, insert_atoms):
     """
-    smiles: строка в формате star_smiles
-    pattern: паттерн для разбора формата star_smiles
-
-    Возвращает упрощение строки star_smiles в формате, 
-    в котором уже больше не встречается pattern, плюс индексы, 
-    атомы на которых следует добавить в соответствующее множество
+    smiles: строка в формате star-smiles
+    pattern: паттерн для разбора формата star-smiles
+    attach_atoms: список позиций аттачей
+    insert_atoms: список позиций инсертов
 
     Паттерн может иметь вид (упрощённо) *+ или {...}*+
+
+    return: упрощение строки star_smiles в формате, 
+              в котором уже больше не встречается pattern, плюс индексы, 
+              атомы на которых следует добавить в соответствующее множество
     """
 
     simple_case = '\{' not in pattern
-    match_shift = pattern.count('\*') + (0 if simple_case else 2)  # 2 за счёт скобок {}
+    # сдвиг совпадения увеличивается на 2 за счёт скобок {}
+    match_shift = pattern.count('\*') + (0 if simple_case else 2)
     indexes = []
     offset = 0
 
@@ -154,7 +144,8 @@ def token_proc(smiles, pattern, appended_atoms, replaced_atoms):
 
         if simple_case:
             smiles = smiles[:real_start] + smiles[real_end:]
-            # Позиция перед началом серии звёзд должна попадать на конец описания атома
+            # Позиция перед началом серии звёзд 
+            # должна попадать на конец описания атома
             indexes.append(real_start - 1)
         else:
             # Исключаем {, } и звёзды после }:
@@ -165,8 +156,8 @@ def token_proc(smiles, pattern, appended_atoms, replaced_atoms):
             indexes.extend(xrange(real_start, real_end - match_shift))
 
         offset += match_shift
-        _shift_values_greater(appended_atoms, match.end(), -match_shift)
-        _shift_values_greater(replaced_atoms, match.end(), -match_shift)
+        _shift_values_greater(attach_atoms, match.end(), -match_shift)
+        _shift_values_greater(insert_atoms, match.end(), -match_shift)
     return smiles, indexes
 
 
@@ -185,10 +176,12 @@ def _shift_values_greater(values, threshold, shift):
 
 def single_atom_to_graph(atom):
     """
+    atom: атом, для которого генерируется граф
+
     Если atom совпадает с одним из списка atom_data, 
     то есть возможность быстро преобразовать его в граф
 
-    Возвращает граф, если условия выполнены, иначе возвращает None
+    return: граф, если условия выполнены, иначе возвращает None
     """
     AtomData = namedtuple('AtomData', ['valence'])
 

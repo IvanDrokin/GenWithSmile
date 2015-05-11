@@ -1,78 +1,68 @@
 # coding=utf-8
-import re
+
 import numpy as np
-from pyper import *
+from rdkit import Chem
 
 
-def smiles2graph(smiles_string, aromatic=0):
-    # ==================================
-    # Test input
-    # aromatic = 1
-    # smiles_string = 'c1ccncc1c2ccccc2'
-    # ==================================
-    # TODO to openBabel python
-    rs = R()
-    rs('a <- %s' % Str4R(smiles_string))
-    rs('library("ChemmineR")')
-    rs('smiset = as(a, "SMIset")')
-    rs('sdfset = smiles2sdf(smiset)')
-    rs('ab = atomblock(sdfset[[1]])')
-    rs('bb = bondblock(sdfset[[1]])')
-    rs('cb = bonds(sdfset[[1]]);')
-    rs('hb = bonds(sdfset[[1]], type="addNH")')
-    rs('at_names = row.names(ab);')
-    rs('rings <- rings(sdfset[[1]], upper=7, type="all", arom=TRUE, inner=FALSE)')
-    rs('r = rings[[1]]')
-    rs('rt = sapply(rings[[2]],function(x){ifelse(x,1,0)})')
-    bond = np.array(rs['bb'])
-    # cb = rs['cb']
-    num_h = rs['hb']
-    an = rs['at_names']
-    r = rs['r']
-    rt = (rs['rt'])
-    if isinstance(rt, int):
-        rt = [rt]
-    atom = rs['cb$atom']
-    nbondcount = rs['cb$Nbondcount']
-    nbondrule = rs['cb$Nbondrule']
-    charge = rs['cb$charge']
-    # end openBabel python
+def smiles2graph(smiles_string):
+
+    mol = Chem.MolFromSmiles(smiles_string)
+    mol_with_h = Chem.AddHs(mol)
+
+    ind_oh_chi_h = []
+    atom_with_h = mol_with_h.GetAtoms()
+    for i in range(mol_with_h.GetNumAtoms()):
+        if atom_with_h[i].GetSymbol() == 'H':
+            if int(atom_with_h[i].GetBonds()[0].GetBeginAtom().GetChiralTag()) in (1, 2):
+                ind_oh_chi_h.append((atom_with_h[i], atom_with_h[i].GetBonds()[0].GetBeginAtom().GetIdx(),
+                                     atom_with_h[i].GetBonds()[0].GetBondType()))
+
+    ind_oh_chi_h.sort(reverse=True)
+    mol = Chem.EditableMol(mol)
+    for (atom_, i2, bond_type) in ind_oh_chi_h:
+        i = mol.AddAtom(atom_)
+        mol.AddBond(i2, i, bond_type)
+    mol = mol.GetMol()
+
+    mol_atoms = mol.GetAtoms()
+    rings = mol.GetRingInfo()
+
+    # fast hack for cacl parameters with rdkit
+    atom = np.array([atom_.GetSymbol() for atom_ in mol_atoms])
+    nbondrule = np.array([atom_.GetTotalValence() for atom_ in mol_atoms])
+    nbondcount = np.array([atom_.GetExplicitValence() for atom_ in mol_atoms])
+    charge = np.array([atom_.GetFormalCharge() for atom_ in mol_atoms])
+    an = np.array(['{}_{}'.format(atom_.GetSymbol(), atom_.GetIdx()) for atom_ in mol_atoms])
+    num_h = mol_with_h.GetNumAtoms() - mol.GetNumAtoms()
+    r = {'ring%s' % i: np.array([an[j] for j in ring]) for i, ring in enumerate(rings.AtomRings())}
+    rt = np.array([int(mol.GetBondWithIdx(ring[0]).GetIsAromatic())
+                   for ring in rings.BondRings()])
+    bond = np.array([[bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1, int(bond.GetBondType())]
+                     for bond in mol.GetBonds()])
+    chi_centers = np.array([int(atoms.GetChiralTag()) for atoms in mol.GetAtoms()])
+
     num_vertex = np.amax(bond[:, [0, 1]])
-    gr = np.zeros((num_vertex, num_vertex))
-    hb = np.zeros((num_vertex, num_vertex))
+    gr = np.zeros((num_vertex, num_vertex), dtype=int)
+    hb = np.zeros((num_vertex, num_vertex), dtype=int)
 
     bond[:, [0, 1]] = bond[:, [0, 1]] - 1
     for i in range(bond.shape[0]):
-        if bond[i, 3] > 0:
-            if bond[i, 3] == 1:  # @
-                gr[bond[i, 0], bond[i, 1]] = bond[i, 2]
-                hb[bond[i, 0], bond[i, 1]] = 4
-            else:
-                # bond(i,4) == 6
-                gr[bond[i, 0], bond[i, 1]] = bond[i, 2]
-                hb[bond[i, 0], bond[i, 1]] = 8
-        else:
-            gr[bond[i, 0], bond[i, 1]] = bond[i, 2]
+        gr[bond[i, 0], bond[i, 1]] = bond[i, 2]
 
     gr = gr + gr.transpose()
     hb = hb + hb.transpose()
-    sb = np.zeros((num_vertex, 1))
+    sb = np.zeros((num_vertex, 1), dtype=int)
     for i in range(len(rt)):
         if rt[i] == 1:
-            ring_atoms = r['ring' + str(i + 1)]
+            ring_atoms = r['ring' + str(i)]
             ring_index = np.zeros((len(ring_atoms) + 1, 1), dtype=np.int)
             for j in range(len(ring_atoms)):
                 ring_index[j] = range(len(an))[np.arange(len(an))[(ring_atoms[j] == an)]]
             ring_index[-1] = ring_index[0]
             sb[ring_index] = 1
-            if aromatic:
-                ind_i = np.concatenate((ring_index[:-1], ring_index[1:]))
-                ind_j = np.concatenate(([ring_index[1:], ring_index[:-1]]))
-                mb = np.mean(gr[ind_i.flat, ind_j.flat])
-                gr[ind_i.flat, ind_j.flat] = mb
 
     # TODO what to do with charge?
-    gr2 = np.zeros((len(atom), num_h))
+    gr2 = np.zeros((len(atom), num_h), dtype=int)
     hcount = 0
     for i in range(len(atom)):
         k = nbondrule[i] - nbondcount[i]
@@ -82,70 +72,53 @@ def smiles2graph(smiles_string, aromatic=0):
     # ap[i,1] - atom's index in smiles, start , ap[i,2] atom's index in smiles, end
 
     ap = np.zeros((len(atom), 2), dtype=int)
-    auniq = list(set(atom))
-    ind = np.zeros((len(atom)*2), dtype=int)
-    cnt = 0
+    smiles_string_tmp = smiles_string.lower()
+    star = '*'
+    for (i, atom_) in enumerate(atom):
+        ind = smiles_string_tmp.find(atom_.lower())
+        ap[i, 0] = ind
+        ap[i, 1] = ind + len(atom_) - 1
+        smiles_string_tmp = smiles_string_tmp[:ap[i, 0]] + star*len(atom_) + smiles_string_tmp[(ap[i, 1] + 1):]
 
-    aind = np.zeros((2 * len(atom)), dtype='object')
-    for i in range(len(auniq)):
-        k = [j for j in range(len(smiles_string.upper())) if smiles_string.upper().startswith(auniq[i].upper(), j)]
-        ind[cnt:(cnt + len(k))] = k
-        aind[cnt:(cnt + len(k))] = auniq[i]
-        cnt += len(k)
-    ind = ind[:cnt]
-    aind = aind[:cnt]
-    ix = np.argsort(ind, 0)
-    ind = ind[ix]
-    aind = aind[ix]
+    for i in range(len(chi_centers)):
+        if chi_centers[i] == 1:
+            if ap[i, 1] < len(smiles_string):
+                if smiles_string[(ap[i, 1]+1):(ap[i, 1]+3)] == '@@':
+                    i2 = np.where(ap[:, 0] == ap[i, 1]+3)[0][0]
+                    hb[i, i2] = 8
+                    hb[i2, i] = 8
+        elif chi_centers[i] == 2:
+            if ap[i, 1] < len(smiles_string):
+                if smiles_string[(ap[i, 1]+1):(ap[i, 1]+2)] == '@':
+                    i2 = np.where(ap[:, 0] == ap[i, 1]+2)[0][0]
+                    hb[i, i2] = 4
+                    hb[i2, i] = 4
 
-    cnt = 0
-    while True:
-        # ind_tmp = np.array((ind == ind[cnt]).nonzero())
-        # ind_tmp = np.array((ind == ind[cnt]).ravel().nonzero())
-        ind_tmp = np.where(ind == ind[cnt])[0]
-        if len(ind_tmp) > 1:
-            l2 = np.zeros((len(ind_tmp)), dtype=int)
-            for j in range(len(ind_tmp)):
-                l2[j] = len(aind[ind_tmp[j]])
-            in2 = np.argmax(l2)
-            ind_tmp = np.delete(ind_tmp, in2)  # ind_tmp[in2] = []
-            ind = np.delete(ind, ind_tmp)  # ind[ind_tmp] = []
-            aind = np.delete(aind, ind_tmp)  # aind[ind_tmp] = []
-            cnt = 0
-        else:
-            cnt += 1
-            if cnt >= len(ind):
-                break
+    index = np.argsort(ap[:, 0])
 
-    for i in range(len(aind)):
-        if (ind[i] == 0) or ((ind[i] + len(aind[i])) == len(aind)):
-            ap[i, 0] = ind[i]
-            ap[i, 1] = ind[i] + len(aind[i]) - 1
-        else:
-            f = ind[i]
-            l = ind[i] + len(aind[i]) - 1
-            # Isotope check
-            token = '\[[0-9]{1,}' + str(aind[i]) + '\]'
-            s1 = re.finditer(token, smiles_string)
-            for m in s1:
-                if m.start(0) < f and l < m.end(0):
-                    l = m.end(0)
-                    f = m.start(0)
-                    break
-            ap[i, 0] = f
-            ap[i, 1] = l
-            # ion check
-            token = '\[' + str(aind[i]) + '\+{1,}[0-9]{0,}\]'
-            s1 = re.finditer(token, smiles_string)
-            for m in s1:
-                if m.start(0) < f and l < m.end(0):
-                    l = m.end(0)
-                    f = m.start(0)
-                    break
-            ap[i, 0] = f
-            ap[i, 1] = l
+    gr = gr[:, index]
+    gr = gr[index, :]
+
+    hb = hb[:, index]
+    hb = hb[index, :]
+
+    gr2 = gr2[index, :]
+    ghs = np.sum(gr2, 1)
+    ghs = ghs.astype('int')
+    gr2 = np.zeros(np.shape(gr2))
+    off = 0L
+    for k in range(len(ghs)):
+        gr2[k, range(off, (off + ghs[k]))] = 1
+        off = off + ghs[k]
+
+    atom = atom[index]
+    ap = ap[index, :]
+    sb = sb[index]
+    charge = charge[index]
+
     poia = range(np.shape(gr)[0])
     poih = range(np.shape(gr)[0])
+
     '''
     % gr = основной граф
     % gr2 = граф водорода
@@ -158,5 +131,6 @@ def smiles2graph(smiles_string, aromatic=0):
     % poia = доступные точки для аттачей
     % smiles = исходный smiles
     '''
+
     return {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': charge,
             'poia': poia, 'poih': poih, 'smiles': smiles_string}

@@ -240,7 +240,6 @@ def generate_1(mol, invh, inva, adds_in):
                                 np.hstack([np.zeros((np.shape(grh)[0], np.shape(gmh0)[1])), grh])])
 
                 gh[inva[i], :] = 0
-                gh[:, inva[i]] = 0
                 gh = np.delete(gh, np.where(np.sum(gh, 0) == 0), 1)  # gh[:, np.where(sum(gh) == 0)] = []
                 if mh_ad - mh_add > 0:
                     add_h_arr = np.zeros((np.shape(gh)[0], (mh_ad - mh_add)))

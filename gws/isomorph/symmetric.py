@@ -1,11 +1,15 @@
 import numpy as np
-import copy
 
 from gws.isomorph import internal
 
 
-def get_symmetric(mol, poih=copy.copy([]), poia=copy.copy([])):
+def get_symmetric(mol, poih=None, poia=None):
     # {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': charge}
+    if poih is None:
+        poih = []
+    if poia is None:
+        poia = []
+
     g = mol['g'] + mol['hb']
     #gh = mol['gh']
     a = mol['atom']

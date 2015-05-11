@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 
+
 def graphs_isomorph_atom(adj1, adj2, atom1, atom2):
     nx_graph1 = mol2nxgraph(adj1, atom1)
     nx_graph2 = mol2nxgraph(adj2, atom2)
@@ -26,8 +27,12 @@ def mol2nxgraph(adj, atom):
                     lb = '-'
                 elif adj[i, j] == 2:
                     lb = '='
-                else:
+                elif adj[i, j] == 3:
                     lb = '#'
+                elif adj[i, j] == 12:
+                    lb = '||'
+                else:
+                    lb = ''
                 g1.add_edge(i, j, weight=adj[i, j], label=lb)
 
     return g1

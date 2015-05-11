@@ -4,7 +4,7 @@ import numpy as np
 from rdkit import Chem
 
 
-def smiles2graph(smiles_string, aromatic=0):
+def smiles2graph(smiles_string):
 
     mol = Chem.MolFromSmiles(smiles_string)
     mol_with_h = Chem.AddHs(mol)
@@ -42,8 +42,8 @@ def smiles2graph(smiles_string, aromatic=0):
     chi_centers = np.array([int(atoms.GetChiralTag()) for atoms in mol.GetAtoms()])
 
     num_vertex = np.amax(bond[:, [0, 1]])
-    gr = np.zeros((num_vertex, num_vertex))
-    hb = np.zeros((num_vertex, num_vertex))
+    gr = np.zeros((num_vertex, num_vertex), dtype=int)
+    hb = np.zeros((num_vertex, num_vertex), dtype=int)
 
     bond[:, [0, 1]] = bond[:, [0, 1]] - 1
     for i in range(bond.shape[0]):
@@ -51,23 +51,18 @@ def smiles2graph(smiles_string, aromatic=0):
 
     gr = gr + gr.transpose()
     hb = hb + hb.transpose()
-    sb = np.zeros((num_vertex, 1))
+    sb = np.zeros((num_vertex, 1), dtype=int)
     for i in range(len(rt)):
         if rt[i] == 1:
-            ring_atoms = r['ring' + str(i + 1)]
+            ring_atoms = r['ring' + str(i)]
             ring_index = np.zeros((len(ring_atoms) + 1, 1), dtype=np.int)
             for j in range(len(ring_atoms)):
                 ring_index[j] = range(len(an))[np.arange(len(an))[(ring_atoms[j] == an)]]
             ring_index[-1] = ring_index[0]
             sb[ring_index] = 1
-            if aromatic:
-                ind_i = np.concatenate((ring_index[:-1], ring_index[1:]))
-                ind_j = np.concatenate(([ring_index[1:], ring_index[:-1]]))
-                mb = np.mean(gr[ind_i.flat, ind_j.flat])
-                gr[ind_i.flat, ind_j.flat] = mb
 
     # TODO what to do with charge?
-    gr2 = np.zeros((len(atom), num_h))
+    gr2 = np.zeros((len(atom), num_h), dtype=int)
     hcount = 0
     for i in range(len(atom)):
         k = nbondrule[i] - nbondcount[i]
@@ -77,10 +72,10 @@ def smiles2graph(smiles_string, aromatic=0):
     # ap[i,1] - atom's index in smiles, start , ap[i,2] atom's index in smiles, end
 
     ap = np.zeros((len(atom), 2), dtype=int)
-    smiles_string_tmp = smiles_string
+    smiles_string_tmp = smiles_string.lower()
     star = '*'
     for (i, atom_) in enumerate(atom):
-        ind = smiles_string_tmp.find(atom_)
+        ind = smiles_string_tmp.find(atom_.lower())
         ap[i, 0] = ind
         ap[i, 1] = ind + len(atom_) - 1
         smiles_string_tmp = smiles_string_tmp[:ap[i, 0]] + star*len(atom_) + smiles_string_tmp[(ap[i, 1] + 1):]

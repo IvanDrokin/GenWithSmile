@@ -16,11 +16,11 @@ def graph_kernel(mol_list, sm_list, mol_feat_list, mol_test, gk_param):
     rjob = gk_param['rjob']
 
     vectorizer = Vectorizer(complexity=complexity, r=r, d=d, min_r=min_r, min_d=min_d, nbits=nbits)
-    graphs_list = (mol2nxgraph(mol['g'], mol['atom']) for mol in mol_test)
+    graphs_list = (mol2nxgraph(mol.g, mol.atom) for mol in mol_test)
 
     if not mol_list:
         mol_feat_list = vectorizer.transform(graphs_list, n_jobs=rjob)
-        sm_test = [mol['smiles'] for mol in mol_test]
+        sm_test = [mol.smiles for mol in mol_test]
         return mol_test, sm_test, mol_feat_list
 
     x_test = vectorizer.transform(graphs_list, n_jobs=rjob)
@@ -28,7 +28,7 @@ def graph_kernel(mol_list, sm_list, mol_feat_list, mol_test, gk_param):
     for i, mol in enumerate(mol_test):
         if len(np.where(k[:, i] > p)[0]) < 1:
             mol_list.append(mol)
-            sm_list.append(mol['smiles'])
+            sm_list.append(mol.smiles)
             mol_feat_list = vstack([mol_feat_list, x_test[i, ]])
     return mol_list, sm_list, mol_feat_list
 

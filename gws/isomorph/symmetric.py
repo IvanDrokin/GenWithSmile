@@ -8,7 +8,7 @@ from gws.isomorph.internal import is_isomorph_nx, mol2nxgraph
 
 def get_symmetric(mol, attach_positions=None, insert_positions=None):
     """
-    mol: словарь, представляющий собой молекулу во внутреннем представлении
+    mol: объект класса gws.Molecule, представляющий собой молекулу
     attach_positions: список позиций в графе, подлежащий проверке изоморфизма аттача
     insert_positions: список позиций в графе, подлежащий проверке изоморфизма инсерта
 
@@ -20,7 +20,7 @@ def get_symmetric(mol, attach_positions=None, insert_positions=None):
     if insert_positions is None:
         insert_positions = []
 
-    graph = mol2nxgraph(mol['g'] + mol['hb'], mol['atom'])
+    graph = mol2nxgraph(mol.g + mol.hb, mol.atom)
 
     attach_positions = _get_nonisomorphic_positions(graph, add_vertex_to, attach_positions)
     insert_positions = _get_nonisomorphic_positions(graph, change_vertex, insert_positions)

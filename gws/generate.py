@@ -1,6 +1,8 @@
 import re
 import numpy as np
 
+from gws import Molecule
+
 from gws.isomorph import graph_kernel as gk
 from gws.isomorph import symmetric, internal
 
@@ -8,8 +10,8 @@ from gws.isomorph import symmetric, internal
 def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
     #  {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': ap, 'hb': hb, 'sb': sb,
     #  'charge': charge, 'poih': poih, 'poia': poia}
-    poih = m0['poih']
-    poia = m0['poia']
+    poih = m0.poih
+    poia = m0.poia
     invh, inva = symmetric.get_symmetric(m0, poih, poia)
     molh, mola = generate_1(m0, invh, inva, adds)
     list_mols = []
@@ -23,8 +25,8 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
         nl_s = []
         nl_f = []
         for j in range(len(curr_m)):
-            poih = curr_m[j]['poih']
-            poia = curr_m[j]['poia']
+            poih = curr_m[j].poih
+            poia = curr_m[j].poia
             # Check symmetric
             invh, inva = symmetric.get_symmetric(curr_m[j], poih, poia)
             # generate_1
@@ -41,10 +43,10 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
         list_mols += nl_m
         list_mols_smiles += nl_s
     for i in range(len(list_mols)):
-        list_mols[i]['poia'] = list_mols[i]['poia_add']
-        list_mols[i]['poih'] = list_mols[i]['poih_add']
-        list_mols[i]['poih_add'] = []
-        list_mols[i]['poia_add'] = []
+        list_mols[i].poia = list_mols[i].poia_add
+        list_mols[i].poih = list_mols[i].poih_add
+        list_mols[i].poih_add = []
+        list_mols[i].poia_add = []
     return list_mols, list_mols_smiles
 
 
@@ -62,7 +64,7 @@ def unconcat(nl_m, nl_s, molh, mola):
     indx = np.where(mask == 1)[0]
     #  mol_tmp = [mol[i] for i in indx]
     nl_m += [mol[i] for i in indx]
-    nl_s += [mol[i]['smiles'] for i in indx]
+    nl_s += [mol[i].smiles for i in indx]
     #  nl_s += get_list_of_smiles(mol_tmp)
     return nl_m, nl_s
 
@@ -70,33 +72,33 @@ def unconcat(nl_m, nl_s, molh, mola):
 def get_list_of_smiles(mol_tmp):
     smiles = []
     for i in range(len(mol_tmp)):
-        smiles.append(mol_tmp[i]['smiles'])
+        smiles.append(mol_tmp[i].smiles)
     return smiles
 
 
 def graphs_isomorph_mol(mol1, mol2):
-    g1 = mol1['g'] + mol1['hb']
-    g2 = mol2['g'] + mol2['hb']
-    a1 = mol1['atom']
-    a2 = mol2['atom']
+    g1 = mol1.g + mol1.hb
+    g2 = mol2.g + mol2.hb
+    a1 = mol1.atom
+    a2 = mol2.atom
     return internal.graphs_isomorph_atom(g1, g2, a1, a2)
 
 
 def generate_1(mol, invh, inva, adds_in):
     #  {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': charge, 'poia': poia}
-    gm0 = mol['g']
-    gmh0 = mol['gh']
-    ma0 = mol['atom']
-    ap0 = mol['atom_pos']
-    hb0 = mol['hb']
-    sb0 = mol['sb']
-    chaarge0 = mol['charge']
-    smiles0 = mol['smiles']
-    poia0 = mol['poia']
-    poih0 = mol['poih']
-    poia_add0 = mol['poia_add']
-    poih_add0 = mol['poih_add']
-    hist0 = mol['history']
+    gm0 = mol.g
+    gmh0 = mol.gh
+    ma0 = mol.atom
+    ap0 = mol.atom_pos
+    hb0 = mol.hb
+    sb0 = mol.sb
+    chaarge0 = mol.charge
+    smiles0 = mol.smiles
+    poia0 = mol.poia
+    poih0 = mol.poih
+    poia_add0 = mol.poia_add
+    poih_add0 = mol.poih_add
+    hist0 = mol.history
 
     adds = adds_in['attach']
     numadds = np.shape(adds)[0]
@@ -203,9 +205,9 @@ def generate_1(mol, invh, inva, adds_in):
                 for k in range(len(ghs)):
                     gh[k, range(off, (off + ghs[k]))] = 1
                     off = off + ghs[k]
-                mol_out = {'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': chaarge,
+                mol_out = Molecule({'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': chaarge,
                            'poia': poia, 'poih': poih, 'poia_add': poia_add, 'poih_add': poih_add, 'smiles': sm,
-                           'history': hist}
+                           'history': hist})
                 molh.append(mol_out)
 
     adds = adds_in['insert']
@@ -352,9 +354,9 @@ def generate_1(mol, invh, inva, adds_in):
                 for k in range(len(ghs)):
                     gh[k, range(off, (off + ghs[k]))] = 1
                     off = off + ghs[k]
-                mol_out = {'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': chaarge,
+                mol_out = Molecule({'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap, 'hb': hb, 'sb': sb, 'charge': chaarge,
                            'poia': poia, 'poih': poih, 'poia_add': poia_add, 'poih_add': poih_add, 'smiles': sm,
-                           'history': hist}
+                           'history': hist})
                 mola.append(mol_out)
 
     return molh, mola

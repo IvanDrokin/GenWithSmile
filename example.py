@@ -13,6 +13,7 @@ import timeit
 from gws import generate as g
 from gws.io import get_data as gd
 from gws.isomorph import graph_kernel as gk
+from gws import molecule_from_star_smiles
 
 
 def main():
@@ -82,11 +83,10 @@ def main():
                    'insert': ['{Cl}', '{O}'], 'names_in': ['CCl', 'O']}
 
     # Преобразование star-smiles в молекулу
-    frame = gd.star_smiles_to_mol(start_star_smiles)
+    frame = molecule_from_star_smiles(start_star_smiles)
 
     # Преобразование аддонов в молекулы
     addons = gd.data_prep_addons(addons_data)
-
 
     # Проверка на изоморфизм через GK
     gk_param = gk.get_def_par()

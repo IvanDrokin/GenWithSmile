@@ -1,4 +1,4 @@
-# encoding: utf-8
+# coding=utf-8
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 
@@ -12,14 +12,19 @@ def graphs_isomorph_atom(adj1, adj2, atom1, atom2):
 
     return: True если графы изоморфны с учётом типов связей и атомов, иначе False
     """
-    nx_graph1 = mol2nxgraph(adj1, atom1)
-    nx_graph2 = mol2nxgraph(adj2, atom2)
+    return is_isomorph_nx(mol2nxgraph(adj1, atom1), mol2nxgraph(adj2, atom2))
 
-    is_iso = nx.faster_could_be_isomorphic(nx_graph1, nx_graph2)
+    
+def is_isomorph_nx(graph1, graph2):
+    """
+    graph1, graph2: графы в формате networkx, изоморфность которых проверяется
+    return: True, если графы изоморфны, иначе False
+    """
+    is_iso = nx.faster_could_be_isomorphic(graph1, graph2)
     node_match = iso.categorical_node_match('label', 'C')
     edge_match = iso.categorical_edge_match(['weight', 'label'], [1, '-'])
     if is_iso:
-        return iso.is_isomorphic(nx_graph1, nx_graph2, 
+        return iso.is_isomorphic(graph1, graph2, 
                                  node_match=node_match, edge_match=edge_match)
     return False
 

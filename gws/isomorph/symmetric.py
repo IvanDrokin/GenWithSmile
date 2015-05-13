@@ -20,7 +20,7 @@ def get_symmetric(mol, attach_positions=None, insert_positions=None):
     if insert_positions is None:
         insert_positions = []
 
-    graph = mol2nxgraph(mol.g + mol.hb, mol.atom)
+    graph = mol2nxgraph(mol.g, mol.atom)
 
     attach_positions = _get_nonisomorphic_positions(graph, add_vertex_to, attach_positions)
     insert_positions = _get_nonisomorphic_positions(graph, change_vertex, insert_positions)
@@ -43,7 +43,6 @@ def _get_nonisomorphic_positions(graph, editor_manager, positions):
         is_isomorph[j] = is_isomorph_nx(graph1, graph2)
 
     return positions[~is_isomorph]
-
 
 
 def _get_graph_combinations(graph, editor_manager, positions, no_edit_mask):

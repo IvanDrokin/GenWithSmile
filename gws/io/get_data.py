@@ -19,8 +19,8 @@ def star_smiles_to_mol(star_smiles):
     
     frame_mol['poia'] = _get_interest_atom_indexes(atom_pos, insert_atoms)
     frame_mol['poih'] = _get_interest_atom_indexes(atom_pos, attach_atoms)
-    frame_mol['poia_add'] = []
-    frame_mol['poih_add'] = []
+    frame_mol['poia_add'] = np.array([], dtype=int)
+    frame_mol['poih_add'] = np.array([], dtype=int)
     frame_mol['history'] = []
     return frame_mol
 
@@ -197,12 +197,11 @@ def single_atom_to_graph(atom):
 
     data = atom_data[atom]
     mol_data = {
-        'g': np.array([[0]]),
+        'g': np.array([[0]], dtype=int),
         'gh': np.ones((1, data.valence), dtype=int),
         'atom': np.array([atom]),
         'atom_pos': np.array([[0, len(atom) - 1]]),
-        'hb': np.array([[0]]),
-        'sb': np.array([0]),
+        'chiral_tags': np.array([0]),
         'charge': np.array([0]),
         'poia': np.array([[0]]),
         'poih': np.array([[0]]),

@@ -5,33 +5,28 @@ from internal import mol2nxgraph
 import numpy as np
 
 
-def graph_kernel(mol_list, sm_list, mol_feat_list, mol_test, gk_param):
-    p = gk_param['p']
-    complexity = gk_param['complexity']
-    r = gk_param['r']
-    d = gk_param['d']
-    min_r = gk_param['min_r']
-    min_d = gk_param['min_d']
-    nbits = gk_param['nbits']
-    rjob = gk_param['rjob']
-
-    vectorizer = Vectorizer(complexity=complexity, r=r, d=d, min_r=min_r, min_d=min_d, nbits=nbits)
+def graph_kernel(mol_list, mol_test, gk_param):
+    vectorizer = Vectorizer(complexity=gk_param['complexity'], r=gk_param['r'], d=gk_param['d'],
+                            min_r=gk_param['min_r'], min_d=gk_param['min_d'],
+                            nbits=gk_param['nbits'])
     graphs_list = (mol2nxgraph(mol.g, mol.atom) for mol in mol_test)
 
     if not mol_list:
-        mol_feat_list = vectorizer.transform(graphs_list, n_jobs=rjob)
-        sm_test = [mol.smiles for mol in mol_test]
-        return mol_test, sm_test, mol_feat_list
+        mol_feat_list = vectorizer.transform(graphs_list, n_jobs=gk_param['rjob'])
+        for (i, mol) in enumerate(mol_test):
+            mol.graph_kernel_vect = mol_feat_list[i, :]
+        return mol_test
 
-    x_test = vectorizer.transform(graphs_list, n_jobs=rjob)
+    mol_feat_list = vstack([mol.graph_kernel_vect for mol in mol_list])
+    x_test = vectorizer.transform(graphs_list, n_jobs=gk_param['rjob'])
     k = metrics.pairwise.pairwise_kernels(mol_feat_list, x_test, metric='cosine')
     for i, mol in enumerate(mol_test):
-        if len(np.where(k[:, i] > p)[0]) < 1:
+        if len(np.where(k[:, i] > gk_param['p'])[0]) < 1:
+            mol.graph_kernel_vect = x_test[i,:]
             mol_list.append(mol)
-            sm_list.append(mol.smiles)
-            mol_feat_list = vstack([mol_feat_list, x_test[i, ]])
-    return mol_list, sm_list, mol_feat_list
+    return mol_list
 
 
 def get_def_par():
-    return {'p': 0.99999, 'complexity': 4, 'r': None, 'd': None, 'min_r': 0, 'min_d': 0, 'nbits': 20, 'rjob': 1}
+    return {'p': 0.99999, 'complexity': 4, 'r': None, 'd': None, 'min_r': 0,
+            'min_d': 0, 'nbits': 20, 'rjob': 1}

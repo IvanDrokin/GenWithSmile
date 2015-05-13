@@ -1,4 +1,6 @@
 # coding=utf-8
+from rdkit import Chem
+
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 
@@ -54,3 +56,17 @@ def mol2nxgraph(adjacency_matrix, atom_symbols):
             graph.add_edge(i, j, weight=edge_type, label=label)
 
     return graph
+
+
+def get_list_of_smiles(mol_tmp):
+    smiles = []
+    for mol in mol_tmp:
+        rdkit_mol = Chem.MolFromSmiles(mol.smiles)
+        chirat_type_by_index = {0: Chem.rdchem.ChiralType.CHI_UNSPECIFIED,
+                                1: Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW,
+                                2: Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW,
+                                3: Chem.rdchem.ChiralType.CHI_OTHER}
+        for (j, atom) in enumerate(rdkit_mol.GetAtoms()):
+            atom.SetChiralTag(chirat_type_by_index.get(mol.chiral_tags[j]))
+        smiles.append(Chem.MolToSmiles(rdkit_mol, rootedAtAtom=0, isomericSmiles=True))
+    return smiles

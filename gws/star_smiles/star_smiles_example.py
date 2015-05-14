@@ -1,7 +1,7 @@
 # coding=utf-8
 
 from parser_exceptions import StarSmilesFormatError
-from parser import StarSmilesParser
+from star_smiles_parser import StarSmilesParser
 
 
 def star_smiles_to_smiles(star_smiles):

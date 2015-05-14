@@ -3,4 +3,5 @@ scipy
 scikit-learn
 networkx
 rdkit
+enum34
 -e git+https://github.com/fabriziocosta/EDeN.git#egg=eden

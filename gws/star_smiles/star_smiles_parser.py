@@ -125,7 +125,7 @@ class StarSmilesParser(object):
         if self.tokens.peek().type == StarSmilesTokens.open_bond_bracket:
             bond_type = self.parse_bond_mark()
             self.block_smiles_data.append(StarSmilesPart(token.data, bond_mark=bond_type))
-        elif self.tokens.peek().type == StarSmilesTokens.close_bracket:
+        if self.tokens.peek().type == StarSmilesTokens.close_bracket:
             return
         self.parse_in_block_smiles()
 

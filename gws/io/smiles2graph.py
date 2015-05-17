@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import numpy as np
+from contextlib import contextmanager
 from rdkit import Chem
 
 
@@ -11,9 +12,9 @@ def get_smiles_atom_out_order(mol):
     return smiles_atom_out_order
 
 
-def smiles2graph(smiles_string):
+def smiles2graph(star_smiles_parser):
 
-    mol = Chem.MolFromSmiles(smiles_string)
+    mol = Chem.MolFromSmiles(star_smiles_parser.smiles)
     smiles_no_chiral = Chem.MolToSmiles(mol, rootedAtAtom=0)
 
     smiles_atom_out_order = get_smiles_atom_out_order(mol)
@@ -60,6 +61,68 @@ def smiles2graph(smiles_string):
         hcount += k
 
     # ap[i,1] - atom's index in smiles, start , ap[i,2] atom's index in smiles, end
+    ap = np.zeros((len(atom), 2), dtype=int)
+    smiles_string_tmp = smiles_no_chiral.lower()
+    star = '*'
+    for i in smiles_atom_out_order:
+        atom_ = atom[i]
+        ind = smiles_string_tmp.find(atom_.lower())
+        ap[i, 0] = ind
+        ap[i, 1] = ind + len(atom_) - 1
+        smiles_string_tmp = smiles_string_tmp[:ap[i, 0]] + star*len(atom_) + \
+                            smiles_string_tmp[(ap[i, 1] + 1):]
+
+    if star_smiles_parser.attach_bonds:
+        attachs = []
+        for (ind, bond) in star_smiles_parser.attach_bonds:
+            addon_smiles = Chem.MolToSmiles(mol, rootedAtAtom=_get_interest_atom_indexes(ap,
+                                                                                         [ind])[0])
+            addon_smiles_atom_out_order = get_smiles_atom_out_order(mol)
+
+            addon_ap = np.zeros((len(atom), 2), dtype=int)
+            smiles_string_tmp = addon_smiles.lower()
+            star = '*'
+            for i in addon_smiles_atom_out_order:
+                atom_ = atom[i]
+                ind = smiles_string_tmp.find(atom_.lower())
+                addon_ap[i, 0] = ind
+                addon_ap[i, 1] = ind + len(atom_) - 1
+                smiles_string_tmp = smiles_string_tmp[:addon_ap[i, 0]] + star*len(atom_) + \
+                                    smiles_string_tmp[(addon_ap[i, 1] + 1):]
+
+            index = np.argsort(addon_ap[:, 0])
+
+            poia = _get_interest_atom_indexes(addon_ap, star_smiles_parser.insert_positions)
+            poih = _get_interest_atom_indexes(addon_ap, star_smiles_parser.attach_positions)
+            new_molec = {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': addon_ap,
+                         'chiral_tags': chiral_tags,
+                         'charge': charge, 'poia': poia, 'poih': poih, 'smiles': addon_smiles,
+                         'poia_add': np.array([], dtype=int), 'poih_add': np.array([], dtype=int),
+                         'history': []}
+
+            new_molec['g'] = new_molec['g'][:, index]
+            new_molec['g'] = new_molec['g'][index, :]
+
+            new_molec['gh'] = new_molec['gh'][index, :]
+            ghs = np.sum(new_molec['gh'], 1)
+            new_molec['gh'] = np.zeros(np.shape(new_molec['gh']), dtype=int)
+            off = 0L
+            for k in range(len(ghs)):
+                new_molec['gh'][k, range(off, (off + ghs[k]))] = 1
+                off = off + ghs[k]
+
+            new_molec['atom'] = new_molec['atom'][index]
+            new_molec['atom_pos'] = new_molec['atom_pos'][index, :]
+            new_molec['charge'] = new_molec['charge'][index]
+            new_molec['chiral_tags'] = new_molec['chiral_tags'][index]
+            new_molec['poih'] = index[new_molec['poih']]
+            new_molec['poia'] = index[new_molec['poia']]
+            new_molec['smiles'] = addon_smiles
+            bond_multiplexity = {'-': 1, '=': 2, '#': 3}
+            new_molec['bound'] = bond_multiplexity[bond]
+            new_molec['name'] = str(ind) + bond
+            attachs.append(new_molec)
+        return attachs
 
     ap = np.zeros((len(atom), 2), dtype=int)
     smiles_string_tmp = smiles_no_chiral.lower()
@@ -69,7 +132,8 @@ def smiles2graph(smiles_string):
         ind = smiles_string_tmp.find(atom_.lower())
         ap[i, 0] = ind
         ap[i, 1] = ind + len(atom_) - 1
-        smiles_string_tmp = smiles_string_tmp[:ap[i, 0]] + star*len(atom_) + smiles_string_tmp[(ap[i, 1] + 1):]
+        smiles_string_tmp = smiles_string_tmp[:ap[i, 0]] + star*len(atom_) + \
+                            smiles_string_tmp[(ap[i, 1] + 1):]
 
     index = np.argsort(ap[:, 0])
 
@@ -88,8 +152,8 @@ def smiles2graph(smiles_string):
     ap = ap[index, :]
     charge = charge[index]
 
-    poia = range(np.shape(gr)[0])
-    poih = range(np.shape(gr)[0])
+    poia = _get_interest_atom_indexes(ap, star_smiles_parser.insert_positions)
+    poih = _get_interest_atom_indexes(ap, star_smiles_parser.attach_positions)
 
     '''
     % gr = основной граф
@@ -104,4 +168,26 @@ def smiles2graph(smiles_string):
     '''
 
     return {'g': gr, 'gh': gr2, 'atom': atom, 'atom_pos': ap, 'chiral_tags': chiral_tags,
-            'charge': charge, 'poia': poia, 'poih': poih, 'smiles': smiles_no_chiral}
+            'charge': charge, 'poia': poia, 'poih': poih, 'smiles': smiles_no_chiral,
+            'poia_add': np.array([], dtype=int), 'poih_add': np.array([], dtype=int),
+            'history': []}
+
+
+
+def _get_interest_atom_indexes(all_atom_positions, positions):
+    """
+    all_atom_positions: массив отрезков [start, end]
+    positions: интересующие концы отрезков
+
+    return: массив индексов отрезков, чей конец является ближайшим
+              к какому-то элементу из списка positions
+    """
+    atom_indexes = np.zeros_like(positions)
+    for i, pos in enumerate(positions):
+        indexes = np.where(all_atom_positions[:, 1] <= pos)[0]
+        if len(indexes) > 0:       # ?? может ли здесь стать True?
+            atom_indexes[i] = indexes[-1]
+    return np.unique(atom_indexes)
+
+
+

@@ -79,7 +79,7 @@ def main():
 
     # Набор аддонов
     # TODO ! rename attach -> attaches, insert -> inserts
-    addons_data = {'attach': ['-{C=CN}', '-{Cl}'], 'names_at': ['n1', 'cl'],
+    addons_data = {'attach': ['{N<#>C<=>(Cl)<->C}', '{N<#>C<=>(Cl)<->N}'], 'names_at': ['n1', 'cl'],
                    'insert': ['{Cl}', '{O}'], 'names_in': ['CCl', 'O']}
 
     # Преобразование star-smiles в молекулу
@@ -111,7 +111,7 @@ def main():
     new_frame_mol = list_mols[-1]
 
     # Задаем новые аддоны
-    addons_data = {'attach': ['-{NC}'], 'names_at': ['n3'], 
+    addons_data = {'attach': ['{N<->C<->}'], 'names_at': ['n3'],
                    'insert': ['{NO}', '{COC}'], 'names_in': ['n4', 'n5']}  
     # Преобразовываем аддоны в молекулы
     addons = gd.data_prep_addons(addons_data)

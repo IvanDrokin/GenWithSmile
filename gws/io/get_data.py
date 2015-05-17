@@ -5,6 +5,8 @@ import numpy as np
 from itertools import izip
 from collections import namedtuple
 from gws.io.smiles2graph import smiles2graph
+from gws.star_smiles.parser_exceptions import StarSmilesFormatError
+from gws.star_smiles.star_smiles_parser import StarSmilesParser
 
 
 def star_smiles_to_mol(star_smiles):
@@ -12,33 +14,24 @@ def star_smiles_to_mol(star_smiles):
     star_smiles: строка в формате star-smiles
     return: граф в виде словаря, описывающего молекулу.
     """
-    smiles, insert_atoms, attach_atoms = star_smiles_to_smiles(star_smiles)
-    frame_mol = single_atom_to_graph(smiles) or smiles2graph(smiles)
+    try:
+        parser = StarSmilesParser(star_smiles)
+        frame_mol = single_atom_to_graph(parser.smiles) or smiles2graph(parser)
 
-    atom_pos = frame_mol['atom_pos']
-    
-    frame_mol['poia'] = _get_interest_atom_indexes(atom_pos, insert_atoms)
-    frame_mol['poih'] = _get_interest_atom_indexes(atom_pos, attach_atoms)
-    frame_mol['poia_add'] = np.array([], dtype=int)
-    frame_mol['poih_add'] = np.array([], dtype=int)
-    frame_mol['history'] = []
-    return frame_mol
-
-
-def _get_interest_atom_indexes(all_atom_positions, positions):
-    """
-    all_atom_positions: массив отрезков [start, end]
-    positions: интересующие концы отрезков
-
-    return: массив индексов отрезков, чей конец является ближайшим 
-              к какому-то элементу из списка positions
-    """
-    atom_indexes = np.zeros_like(positions)
-    for i, pos in enumerate(positions):
-        indexes = np.where(all_atom_positions[:, 1] <= pos)[0]
-        if len(indexes) > 0:       # ?? может ли здесь стать True?
-            atom_indexes[i] = indexes[-1]
-    return np.unique(atom_indexes)
+        '''
+        atom_pos = frame_mol['atom_pos']
+        frame_mol['poia'] = _get_interest_atom_indexes(atom_pos, parser.insert_positions)
+        frame_mol['poih'] = _get_interest_atom_indexes(atom_pos, parser.attach_positions)
+        frame_mol['poia_add'] = np.array([], dtype=int)
+        frame_mol['poih_add'] = np.array([], dtype=int)
+        frame_mol['history'] = []
+        '''
+        return frame_mol
+    except StopIteration:
+        print('Ошибка в star-smiles. Неожиданный конец строки')
+    except StarSmilesFormatError as e:
+        print(e)
+    return None
 
 
 def data_prep_addons(adds):
@@ -58,12 +51,11 @@ def data_prep_addons(adds):
 
     mol_appenders = []
     for app_smiles, name in izip(smiles_appenders, names_appenders):
-        start_bond, smiles = app_smiles[0], app_smiles[1:]
-        bond_multiplexity = { '-': 1, '=': 2, '#': 3 }
-        mol = star_smiles_to_mol(smiles)
-        mol['bound'] = bond_multiplexity[start_bond]
-        mol['name'] = name
-        mol_appenders.append(mol)
+
+        mols = star_smiles_to_mol(app_smiles)
+        for m in mols:
+            m['name'] += name
+        mol_appenders += mols
 
     return {
         'insert': mol_replaces, 
@@ -203,8 +195,8 @@ def single_atom_to_graph(atom):
         'atom_pos': np.array([[0, len(atom) - 1]]),
         'chiral_tags': np.array([0]),
         'charge': np.array([0]),
-        'poia': np.array([[0]]),
-        'poih': np.array([[0]]),
+        'poia': np.array([0]),
+        'poih': np.array([0]),
         'smiles': atom
     }
 

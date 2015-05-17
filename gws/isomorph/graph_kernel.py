@@ -1,8 +1,8 @@
+import numpy as np
 from eden.graph import Vectorizer
 from sklearn import metrics
 from scipy.sparse import vstack
 from internal import mol2nxgraph
-import numpy as np
 
 
 def graph_kernel(mol_list, mol_test, gk_param):
@@ -22,7 +22,7 @@ def graph_kernel(mol_list, mol_test, gk_param):
     k = metrics.pairwise.pairwise_kernels(mol_feat_list, x_test, metric='cosine')
     for i, mol in enumerate(mol_test):
         if len(np.where(k[:, i] > gk_param['p'])[0]) < 1:
-            mol.graph_kernel_vect = x_test[i,:]
+            mol.graph_kernel_vect = x_test[i, :]
             mol_list.append(mol)
     return mol_list
 

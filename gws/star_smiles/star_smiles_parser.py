@@ -4,7 +4,8 @@ import warnings
 from collections import namedtuple
 
 from tokenizer import StarSmilesTokenizer
-from datatypes import BondMark, PositionFlag, StarSmilesTokens
+from tokens import StarSmilesTokens
+from parser_data import BondMark, PositionFlag, symbol_to_bond_mark, is_bond_symbol
 from parser_exceptions import StarSmilesFormatError
 
 # синтаксис star-smiles
@@ -21,13 +22,13 @@ StarSmilesBlock = namedtuple('StarSmilesBlock', ['data', 'position_flag'])
 
 
 class StarSmilesPart(object):
-    def __init__(self, smiles, bond_mark=BondMark.none, position_flag=PositionFlag.none):
+    def __init__(self, smiles, bond_marks=None, position_flag=PositionFlag.none):
         self.smiles = smiles
-        self.bond_mark = bond_mark
+        self.bond_marks = bond_marks or []
         self.position_flag = position_flag
 
     def __repr__(self):
-        return 'SmilesPart({}, {}, {})'.format(self.smiles, self.bond_mark, self.position_flag)
+        return 'SmilesPart({}, {}, {})'.format(self.smiles, self.bond_marks, self.position_flag)
 
 
 class StarSmilesParser(object):
@@ -47,8 +48,9 @@ class StarSmilesParser(object):
                         position_flag=None, all_atoms_flagged=False):
         smiles_parts.append(ss_part.smiles)
         smiles_length += len(ss_part.smiles)
-        if ss_part.bond_mark != BondMark.none:
-            attach_bonds.append((smiles_length - 1, ss_part.bond_mark.value))
+        if ss_part.bond_marks:
+            attach_bonds.extend((smiles_length - 1, bond_mark.value)
+                                for bond_mark in ss_part.bond_marks)
         position_flag = position_flag or ss_part.position_flag
         if not all_atoms_flagged:
             positions = [smiles_length - 1]
@@ -123,13 +125,13 @@ class StarSmilesParser(object):
             self.block_smiles_data.append(StarSmilesPart(token.data))
             return
         if self.tokens.peek().type == StarSmilesTokens.open_bond_bracket:
-            bond_type = self.parse_bond_mark()
-            self.block_smiles_data.append(StarSmilesPart(token.data, bond_mark=bond_type))
+            bond_types = self.parse_bond_marks()
+            self.block_smiles_data.append(StarSmilesPart(token.data, bond_marks=bond_types))
         if self.tokens.peek().type == StarSmilesTokens.close_bracket:
             return
         self.parse_in_block_smiles()
 
-    def parse_bond_mark(self):
+    def parse_bond_marks(self):
         """
         Разбирает последовательность <->, <=>, <#>
 
@@ -142,14 +144,18 @@ class StarSmilesParser(object):
                           format(self.tokens.peek().position))
             next(self.tokens)
             return BondMark.single
+
         text_token = self.assert_token(StarSmilesTokens.text, 'Ожидается обозначение связи аттача')
         self.assert_token(StarSmilesTokens.close_bond_bracket, 'Ожидается >')
-        if text_token.data in ('-', '=', '#'):
-            return {'-': BondMark.single, '=': BondMark.double, '#': BondMark.triple}[
-                text_token.data]
-        raise StarSmilesFormatError(
-            StarSmilesTokens.text, StarSmilesTokens, text_token.position,
-            'Ожидается обозначение связи аттача: -, = или #. Найдено: ' + text_token.data)
+
+        bonds = []
+        for i, bond_str in enumerate(text_token.data):
+            if not is_bond_symbol(bond_str):
+                raise StarSmilesFormatError(
+                    StarSmilesTokens.text, StarSmilesTokens.text, text_token.position + i,
+                    'Найден неизвестный символ в обозначениях связи: ' + bond_str)
+            bonds.append(symbol_to_bond_mark(bond_str))
+        return bonds
 
     def parse_starred_smiles_block(self):
         text_token = next(self.tokens)
@@ -157,24 +163,24 @@ class StarSmilesParser(object):
             raise StarSmilesFormatError(
                 StarSmilesTokens.text, text_token.type, text_token.position, 'Ожидается SMILES')
         if self.tokens.peek().type == StarSmilesTokens.open_bond_bracket:
-            bond_type = self.parse_bond_mark()
+            bond_type = self.parse_bond_marks()
             if self.tokens.peek().type == StarSmilesTokens.stars:
                 position_flag = self._stars_to_position_flag(next(self.tokens))
                 self.parsed_data.append(
                     StarSmilesPart(text_token.data,
-                                   bond_mark=bond_type,
+                                   bond_marks=bond_type,
                                    position_flag=position_flag))
                 return
-            self.parsed_data.append(StarSmilesPart(text_token.data, bond_mark=bond_type))
+            self.parsed_data.append(StarSmilesPart(text_token.data, bond_marks=bond_type))
             return
         if self.tokens.peek().type == StarSmilesTokens.stars:
             stars_token = next(self.tokens)  # skip stars
             position_flag = self._stars_to_position_flag(stars_token)
             if self.tokens.peek().type == StarSmilesTokens.open_bond_bracket:
-                bond_type = self.parse_bond_mark()
+                bond_type = self.parse_bond_marks()
                 self.parsed_data.append(
                     StarSmilesPart(text_token.data,
-                                   bond_mark=bond_type,
+                                   bond_marks=bond_type,
                                    position_flag=position_flag))
                 return
             self.parsed_data.append(StarSmilesPart(text_token.data, position_flag=position_flag))

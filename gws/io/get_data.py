@@ -16,7 +16,7 @@ def star_smiles_to_mol(star_smiles):
     """
     try:
         parser = StarSmilesParser(star_smiles)
-        frame_mol = single_atom_to_graph(parser.smiles) or smiles2graph(parser)
+        frame_mol = single_atom_to_graph(parser) or smiles2graph(parser)
 
         '''
         atom_pos = frame_mol['atom_pos']
@@ -184,20 +184,26 @@ def single_atom_to_graph(atom):
         'O':  AtomData(valence=2),
     }
 
-    if atom not in atom_data:
+    if atom.smiles not in atom_data:
         return
 
-    data = atom_data[atom]
+    data = atom_data[atom.smiles]
+    bond_multiplexity = {'-': 1, '=': 2, '#': 3}
     mol_data = {
         'g': np.array([[0]], dtype=int),
         'gh': np.ones((1, data.valence), dtype=int),
-        'atom': np.array([atom]),
-        'atom_pos': np.array([[0, len(atom) - 1]]),
+        'atom': np.array([atom.smiles]),
+        'atom_pos': np.array([[0, len(atom.smiles) - 1]]),
         'chiral_tags': np.array([0]),
         'charge': np.array([0]),
         'poia': np.array([0]),
         'poih': np.array([0]),
-        'smiles': atom
+        'smiles': atom.smiles
     }
+    if atom.attach_bonds:
+        ind, bound = atom.attach_bonds[0]
+        mol_data['bound'] = bond_multiplexity[bound]
+        mol_data['name'] = '1' + bound
+        mol_data = [mol_data]
 
     return mol_data

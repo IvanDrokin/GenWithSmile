@@ -1,7 +1,6 @@
 # coding=utf-8
 
 import numpy as np
-from contextlib import contextmanager
 from rdkit import Chem
 
 
@@ -173,7 +172,6 @@ def smiles2graph(star_smiles_parser):
             'history': []}
 
 
-
 def _get_interest_atom_indexes(all_atom_positions, positions):
     """
     all_atom_positions: массив отрезков [start, end]
@@ -188,6 +186,3 @@ def _get_interest_atom_indexes(all_atom_positions, positions):
         if len(indexes) > 0:       # ?? может ли здесь стать True?
             atom_indexes[i] = indexes[-1]
     return np.unique(atom_indexes)
-
-
-

@@ -12,13 +12,13 @@ def graph_kernel(mol_list, mol_test, gk_param):
     graphs_list = (mol2nxgraph(mol.g, mol.atom) for mol in mol_test)
 
     if not mol_list:
-        mol_feat_list = vectorizer.transform(graphs_list, n_jobs=gk_param['rjob'])
+        mol_feat_list = vectorizer.transform(graphs_list)
         for (i, mol) in enumerate(mol_test):
             mol.graph_kernel_vect = mol_feat_list[i, :]
         return mol_test
 
     mol_feat_list = vstack([mol.graph_kernel_vect for mol in mol_list])
-    x_test = vectorizer.transform(graphs_list, n_jobs=gk_param['rjob'])
+    x_test = vectorizer.transform(graphs_list)
     k = metrics.pairwise.pairwise_kernels(mol_feat_list, x_test, metric='cosine')
     for i, mol in enumerate(mol_test):
         if len(np.where(k[:, i] > gk_param['p'])[0]) < 1:

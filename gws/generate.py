@@ -13,11 +13,14 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
     #  'charge': charge, 'poih': poih, 'poia': poia}
     poih = m0.poih
     poia = m0.poia
+    list_mols = gk.graph_kernel([], [m0], gk_param)
     invh, inva = symmetric.get_symmetric(m0, poih, poia)
-    list_mols = generate_1(m0, invh, inva, adds)
-    curr_m = list_mols
+    list_mols_gen1 = generate_1(m0, invh, inva, adds)
+    list_mols = gk.graph_kernel(list_mols, list_mols_gen1, gk_param)
+    curr_m = list_mols[1:]
     for i in range(1, num_iter):
-        nl_m = []
+        # nl_m = []
+        nl_m_len = len(list_mols)
         for molecule in curr_m:
             poih = molecule.poih
             poia = molecule.poia
@@ -28,11 +31,11 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
             # cut
             if is_test == 0:
                 if len(mols) > 0:
-                    nl_m = gk.graph_kernel(nl_m, mols, gk_param)
+                    list_mols = gk.graph_kernel(list_mols, mols, gk_param)
             else:
-                nl_m = unconcat(nl_m, mols)
-        curr_m = nl_m
-        list_mols += nl_m
+                list_mols = unconcat(list_mols, mols)
+        curr_m = list_mols[nl_m_len:-1]
+    list_mols = list_mols[1:]
     list_mols_smiles = internal.get_list_of_smiles(list_mols)
     for i in range(len(list_mols)):
         list_mols[i].poia = list_mols[i].poia_add

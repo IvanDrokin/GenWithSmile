@@ -1,6 +1,10 @@
 # coding=utf-8
 
-from datatypes import TokenInfo, StarSmilesTokensHelper, StarSmilesTokens
+from collections import namedtuple
+from tokens import StarSmilesTokens, match_char, is_one_char_token
+
+
+TokenInfo = namedtuple('TokenInfo', ['type', 'position', 'data'])
 
 
 class StarSmilesTokenizer(object):
@@ -26,8 +30,8 @@ class StarSmilesTokenizer(object):
         start = None
         token_type = None
         for pos, char in enumerate(self.star_smiles):
-            new_token_type = StarSmilesTokensHelper.match_char(char)
-            if StarSmilesTokensHelper.is_one_char_token(char):
+            new_token_type = match_char(char)
+            if is_one_char_token(char):
                 if start is not None:          # считывался длинный токен
                     yield TokenInfo(token_type, start, self.star_smiles[start:pos])
                     start = token_type = None

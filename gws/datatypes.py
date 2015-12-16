@@ -12,12 +12,6 @@ def molecule_from_star_smiles(star_smiles):
 class Molecule:
     def __init__(self, raw_mol):
         self._raw_mol = raw_mol
-        self.g = self._raw_mol['g']
-        self.gh = self._raw_mol['gh']
-        self.atom = self._raw_mol['atom']
-        self.atom_pos = self._raw_mol['atom_pos']
-        self.chiral_tags = self._raw_mol['chiral_tags']
-        self.charge = self._raw_mol['charge']
         self.poia = self._raw_mol['poia']
         self.poih = self._raw_mol['poih']
         self.poia_add = self._raw_mol['poia_add']
@@ -25,3 +19,13 @@ class Molecule:
         self.smiles = self._raw_mol['smiles']
         self.history = self._raw_mol['history']
         self.graph_kernel_vect = None
+        self.rdkit_mol = self._raw_mol['rdkit_mol']
+        self.attach_index = None
+        self.bound = None
+        self.name = None
+        if 'attach_index' in raw_mol:
+            self.attach_index = raw_mol['attach_index']
+        if 'bound' in raw_mol:
+            self.attach_index = raw_mol['bound']
+        if 'name' in raw_mol:
+            self.attach_index = raw_mol['name']

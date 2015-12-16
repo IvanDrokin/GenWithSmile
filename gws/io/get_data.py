@@ -2,6 +2,8 @@
 import re
 import numpy as np
 
+from rdkit import Chem
+
 from itertools import izip
 from collections import namedtuple
 from gws.io.smiles2graph import smiles2graph
@@ -56,6 +58,8 @@ def data_prep_addons(adds):
         for m in mols:
             m['name'] += name
         mol_appenders += mols
+
+    # TODO: filter attaches and inserts
 
     return {
         'insert': mol_replaces, 
@@ -182,28 +186,26 @@ def single_atom_to_graph(atom):
         'N':  AtomData(valence=3),
         'Cl': AtomData(valence=1),
         'O':  AtomData(valence=2),
+        'I':  AtomData(valence=1),
+        'Br':  AtomData(valence=1),
     }
 
     if atom.smiles not in atom_data:
         return
 
-    data = atom_data[atom.smiles]
     bond_multiplexity = {'-': 1, '=': 2, '#': 3}
     mol_data = {
-        'g': np.array([[0]], dtype=int),
-        'gh': np.ones((1, data.valence), dtype=int),
-        'atom': np.array([atom.smiles]),
-        'atom_pos': np.array([[0, len(atom.smiles) - 1]]),
-        'chiral_tags': np.array([0]),
-        'charge': np.array([0]),
         'poia': np.array([0]),
         'poih': np.array([0]),
-        'smiles': atom.smiles
+        'smiles': atom.smiles,
+        'aroma_atoms': np.array([0]),
+        'rdkit_mol': Chem.MolFromSmiles(atom.smiles)
     }
     if atom.attach_bonds:
         ind, bound = atom.attach_bonds[0]
         mol_data['bound'] = bond_multiplexity[bound]
         mol_data['name'] = '1' + bound
+        mol_data['attach_index'] = 0
         mol_data = [mol_data]
 
     return mol_data

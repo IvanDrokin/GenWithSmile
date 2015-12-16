@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from gws.isomorph.internal import is_isomorph_nx, mol2nxgraph
+from gws.isomorph.internal import is_isomorph_nx, rdkitmol2graph
 
 
 def get_symmetric(mol, attach_positions=None, insert_positions=None):
@@ -20,7 +20,7 @@ def get_symmetric(mol, attach_positions=None, insert_positions=None):
     if insert_positions is None:
         insert_positions = []
 
-    graph = mol2nxgraph(mol.g, mol.atom)
+    graph = rdkitmol2graph(mol.rdkit_mol)
 
     attach_positions = _get_nonisomorphic_positions(graph, add_vertex_to, attach_positions)
     insert_positions = _get_nonisomorphic_positions(graph, change_vertex, insert_positions)

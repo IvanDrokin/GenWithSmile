@@ -1,6 +1,8 @@
 # coding=utf-8
-import re
+import itertools
 import numpy as np
+
+from rdkit import Chem
 
 from gws import Molecule
 
@@ -40,8 +42,8 @@ def generate(num_iter, m0, adds, is_test=0, gk_param=gk.get_def_par()):
     for i in range(len(list_mols)):
         list_mols[i].poia = list_mols[i].poia_add
         list_mols[i].poih = list_mols[i].poih_add
-        list_mols[i].poih_add = []
-        list_mols[i].poia_add = []
+        list_mols[i].poih_add = np.array([], dtype=int)
+        list_mols[i].poia_add = np.array([], dtype=int)
     return list_mols, list_mols_smiles
 
 
@@ -60,11 +62,9 @@ def unconcat(nl_m, new_mols):
 
 
 def graphs_isomorph_mol(mol1, mol2):
-    g1 = mol1.g
-    g2 = mol2.g
-    a1 = mol1.atom
-    a2 = mol2.atom
-    return internal.graphs_isomorph_atom(g1, g2, a1, a2)
+    g1 = internal.rdkitmol2graph(mol1.rdkit_mol)
+    g2 = internal.rdkitmol2graph(mol2.rdkit_mol)
+    return internal.is_isomorph_nx(g1, g2)
 
 
 def generate_1(mol, invh, inva, adds_in):
@@ -81,13 +81,7 @@ def generate_1(mol, invh, inva, adds_in):
 
 def get_mols_with_attachs(target_point, mol0, addons):
 
-    gm0 = mol0.g
-    gmh0 = mol0.gh
-    ma0 = mol0.atom
-    ap0 = mol0.atom_pos
-    chiral_tags0 = mol0.chiral_tags
-    chaarge0 = mol0.charge
-    smiles0 = mol0.smiles
+    rdkit_mol0 = mol0.rdkit_mol
     poia0 = mol0.poia
     poih0 = mol0.poih
     poia_add0 = mol0.poia_add
@@ -96,239 +90,126 @@ def get_mols_with_attachs(target_point, mol0, addons):
 
     mols_with_attachs = []
 
-    mh = np.sum(gmh0, 1)
+    target_free_b = rdkit_mol0.GetAtomWithIdx(target_point).GetTotalValence() - \
+        rdkit_mol0.GetAtomWithIdx(target_point).GetExplicitValence()
+
     for attach in addons:
         mh_ad = attach['bound']
-        freevol = np.sum(attach['gh'], 1)
-        mh_add = mh_ad
-        if mh[target_point] >= mh_ad and mh_ad <= freevol[0]:
+        mh_index = attach['attach_index']
+        target_free_at = attach['rdkit_mol'].GetAtomWithIdx(mh_index).GetTotalValence() - \
+            attach['rdkit_mol'].GetAtomWithIdx(mh_index).GetExplicitValence()
+        if target_free_b >= mh_ad and mh_ad <= target_free_at:
+            new_rdkitmol = rdkit_mol0.__copy__()
             poia = poia0.copy()
             poih = poih0.copy()
-            poia_add = poia_add0
-            poih_add = poih_add0
+            poia_add = poia_add0.copy()
+            poih_add = poih_add0.copy()
             hist = list(hist0)
 
-            gr = attach['g'].copy()
-            g = np.vstack([np.hstack([gm0, np.zeros((np.shape(gm0)[0], np.shape(gr)[1]))]),
-                           np.hstack([np.zeros((np.shape(gr)[0], np.shape(gm0)[1])), gr])])
-            g[target_point, np.shape(gm0)[0]] = mh_add
-            g[np.shape(gm0)[0], target_point] = mh_add
+            em = Chem.EditableMol(new_rdkitmol)
 
-            grh = attach['gh'].copy()
-            grh[range(mh_add), range(mh_add)] = 0
-            grh = np.delete(grh, range(mh_add), 1)  # grh[:, range(mh_add)] = []
-            gh = np.vstack([np.hstack([gmh0, np.zeros((np.shape(gmh0)[0],
-                                                       np.shape(grh)[1]), dtype=int)]),
-                            np.hstack([np.zeros((np.shape(grh)[0],
-                                                 np.shape(gmh0)[1]), dtype=int), grh])])
-            ind = np.nonzero(gh[target_point, :])[0][0]
-            gh[target_point, range(ind, ind + mh_add)] = 0
-            gh = np.delete(gh, np.where(np.sum(gh) == 0), 1)
+            num_atom1 = len(new_rdkitmol.GetAtoms())
 
-            ar = attach['atom'].copy()
-            a = np.hstack([ma0, ar])
+            for atom in attach['rdkit_mol'].GetAtoms():
+                em.AddAtom(atom)
 
-            chaarge = attach['charge'].copy()
-            chaarge = np.hstack([chaarge0, chaarge])
+            for bond in attach['rdkit_mol'].GetBonds():
+                em.AddBond(bond.GetBeginAtomIdx() + num_atom1, bond.GetEndAtomIdx() + num_atom1,
+                           bond.GetBondType())
+            bond = Chem.rdchem.BondType.SINGLE
+            if mh_ad == 1:
+                bond = Chem.rdchem.BondType.SINGLE
+            elif mh_ad == 2:
+                bond = Chem.rdchem.BondType.DOUBLE
+            elif mh_ad == 3:
+                bond = Chem.rdchem.BondType.TRIPLE
+            elif mh_ad == 4:
+                bond = Chem.rdchem.BondType.QUADRUPLE
+            elif mh_ad == 5:
+                bond = Chem.rdchem.BondType.QUINTUPLE
+            em.AddBond(target_point, mh_index + num_atom1, bond)
 
-            chiral_tags_r = attach['chiral_tags'].copy()
-            chiral_tags = np.hstack([chiral_tags0, chiral_tags_r])
-
-            apr = attach['atom_pos'].copy()
-            smilesr = attach['smiles']
-            # sm = smiles0[range(ap0[invh[i], 1])] + '(' + smilesr ')' +
-            # smiles0[range((1+ap0[invh[i], 1]), len(smiles0))]
-            bound_sm = ''
-            boind_off = 0
-            if mh_ad == 2:
-                boind_off = 1
-                bound_sm = '='
-            if mh_ad == 3:
-                boind_off = 1
-                bound_sm = '#'
-
-            sm = smiles0[0:(ap0[target_point, 1] + 1)] + '(' + bound_sm + smilesr + ')' +\
-                smiles0[(1 + ap0[target_point, 1]):len(smiles0)]
-            #  sm = np.concatenate([smiles0[0:(ap0[invh[i], 1] + 1)], '(', smilesr, ')',
-            #                    smiles0[range((1+ap0[invh[i], 1]), len(smiles0))]])
-
-            s1 = ap0[range(target_point + 1), :]
-            s2 = ap0[range(target_point + 1, np.shape(ap0)[0]), :]
-            ls1 = len(smiles0[0:(ap0[target_point, 1]+1)])
-            lapr = len(smilesr)
-            d = ap0[target_point, 1] - ap0[target_point, 0] + 1
-            ap = np.vstack([s1, s2 + 2 + lapr + boind_off, apr + ls1 + d + boind_off])
-            #  inva_next = np.hstack([poia, tmp_vec])
-
-            tmp_poia = attach['poia'].copy() + ap0.shape[0]
-            tmp_poih = attach['poih'].copy() + ap0.shape[0]
-
-            poia_add = np.hstack([tmp_poia, poia_add])
-            poih_add = np.hstack([tmp_poih, poih_add])
-
-            index = np.argsort(ap[:, 0])
-            ap = ap[index, :]
-            a = a[index]
-            g = g[index, :]
-            g = g[:, index]
-            gh = gh[index, :]
-
-            poia = np.array([p for p in range(len(index))
-                             for r in range(len(poia)) if poia[r] == index[p]])
-            poih = np.array([p for p in range(len(index))
-                             for r in range(len(poih)) if poih[r] == index[p]])
-            poia_add = np.array([p for p in range(len(index))
-                                 for r in range(len(poia_add))
-                                 if poia_add[r] == index[p]])
-            poih_add = np.array([p for p in range(len(index))
-                                 for r in range(len(poih_add))
-                                 if poih_add[r] == index[p]])
-
+            outmol = em.GetMol()
+            Chem.SanitizeMol(outmol)
+            poia_add = np.hstack([poia_add, num_atom1 + attach['poia'].copy()])
+            poih_add = np.hstack([poih_add, num_atom1 + attach['poih'].copy()])
             hist.append('a-' + str(target_point) + '-' + attach['name'])
-            ghs = np.sum(gh, 1)
-            gh = np.zeros(np.shape(gh), dtype=int)
-            off = 0L
-            for k in range(len(ghs)):
-                gh[k, range(off, (off + ghs[k]))] = 1
-                off = off + ghs[k]
-            mol_out = Molecule({'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap,
-                                'chiral_tags': chiral_tags, 'charge': chaarge, 'poia': poia,
-                                'poih': poih, 'poia_add': poia_add, 'poih_add': poih_add,
-                                'smiles': sm, 'history': hist})
+            mol_out = Molecule({'poia': poia, 'poih': poih, 'poia_add': poia_add,
+                                'poih_add': poih_add, 'smiles': Chem.MolToSmiles(outmol),
+                                'history': hist, 'rdkit_mol': outmol})
             mols_with_attachs.append(mol_out)
     return mols_with_attachs
 
 
 def get_mols_with_inserts(target_point, mol0, addons):
 
-    gm0 = mol0.g
-    gmh0 = mol0.gh
-    ma0 = mol0.atom
-    ap0 = mol0.atom_pos
-    chiral_tags0 = mol0.chiral_tags
-    chaarge0 = mol0.charge
-    smiles0 = mol0.smiles
+    rdkit_mol0 = mol0.rdkit_mol
     poia0 = mol0.poia
     poih0 = mol0.poih
     poia_add0 = mol0.poia_add
     poih_add0 = mol0.poih_add
     hist0 = mol0.history
 
-    ma = np.sum(gm0, 1)
-
     mols_with_inserts = []
 
+    target_exp_val = rdkit_mol0.GetAtomWithIdx(target_point).GetExplicitValence()
+
     for addon in addons:
-        mh_ad = np.sum(addon['gh'], 1)[0]  # + sum(adds[j]['g'], 1)[0]
-        mh_ad = mh_ad.astype('int')
-        if ma[target_point] <= mh_ad:
+        mh_index = 0
+        target_free_at = addon['rdkit_mol'].GetAtomWithIdx(mh_index).GetTotalValence() - \
+            addon['rdkit_mol'].GetAtomWithIdx(mh_index).GetExplicitValence()
+        if target_exp_val <= target_free_at:
+            new_rdkitmol = rdkit_mol0.__copy__()
             poia = poia0.copy()
             poih = poih0.copy()
-            poia_add = poia_add0
-            poih_add = poih_add0
+            poia_add = poia_add0.copy()
+            poih_add = poih_add0.copy()
             hist = list(hist0)
 
-            gr = addon['g'].copy()
-            gr1r = gr[0, 1:]
-            gr1c = gr[1:, 0]
-            gr = gr[1:, 1:]
-            g = np.vstack([np.hstack([gm0, np.zeros((np.shape(gm0)[0], np.shape(gr)[1]))]),
-                           np.hstack([np.zeros((np.shape(gr)[0], np.shape(gm0)[1])), gr])])
-            g[target_point, np.shape(gm0)[1]:] = gr1r
-            g[np.shape(gm0)[0]:, target_point] = gr1c
+            em = Chem.EditableMol(new_rdkitmol)
 
-            mh_add = ma[target_point]
-            mh_add = mh_add.astype('int')
-            grh = addon['gh'].copy()
-            grh[0, range(mh_add)] = 0
-            grh = np.delete(grh, range(mh_ad), 1)
-            grh = np.delete(grh, 0, 0)
-            gh = np.vstack([np.hstack([gmh0, np.zeros((np.shape(gmh0)[0],
-                                                       np.shape(grh)[1]), dtype=int)]),
-                            np.hstack([np.zeros((np.shape(grh)[0],
-                                                 np.shape(gmh0)[1]), dtype=int), grh])])
+            em.ReplaceAtom(target_point, addon['rdkit_mol'].GetAtomWithIdx(mh_index))
 
-            gh[target_point, :] = 0
-            gh = np.delete(gh, np.where(np.sum(gh, 0) == 0), 1)
-            if mh_ad - mh_add > 0:
-                add_h_arr = np.zeros((np.shape(gh)[0], (mh_ad - mh_add)), dtype=int)
-                add_h_arr[target_point, :] = 1
-                gh = np.hstack([gh, add_h_arr])
+            num_atom1 = len(new_rdkitmol.GetAtoms())
 
-            ar = addon['atom'].copy()
-            a = np.hstack([ma0, ar[1:]])
-            a[target_point] = ar[0]
+            for atom in addon['rdkit_mol'].GetAtoms():
+                if atom.GetIdx() != mh_index:
+                    em.AddAtom(atom)
 
-            chiral_tags_r = addon['chiral_tags'].copy()
-            chiral_tags = np.hstack([chiral_tags0, chiral_tags_r[1:]])
-            chiral_tags[target_point] = chiral_tags_r[0]
+            for bond in addon['rdkit_mol'].GetBonds():
+                if bond.GetBeginAtomIdx() == mh_index:
+                    em.AddBond(target_point, bond.GetEndAtomIdx() + num_atom1 - 1,
+                               bond.GetBondType())
+                elif bond.GetEndAtomIdx() == mh_index:
+                    em.AddBond(bond.GetBeginAtomIdx() + num_atom1 - 1, target_point,
+                               bond.GetBondType())
+                else:
+                    em.AddBond(bond.GetBeginAtomIdx() + num_atom1 - 1,
+                               bond.GetEndAtomIdx() + num_atom1 - 1,
+                               bond.GetBondType())
+            outmol = em.GetMol()
+            if rdkit_mol0.GetAtomWithIdx(target_point).GetIsAromatic():
+                outmol.GetAtomWithIdx(target_point).SetIsAromatic(True)
+            Chem.SanitizeMol(outmol)
 
-            chaarge_r = addon['charge'].copy()
-            chaarge = np.hstack([chaarge0, chaarge_r[1:]])
-            chaarge[target_point] = chaarge_r[0]
+            poia_add = [i for i in poia_add.tolist() if i != target_point]
+            poia_add += [num_atom1 + i for i in addon['poia'] if i != 0]
+            if 0 in addon['poia']:
+                poia_add.append(target_point)
+            poia_add = np.asarray(poia_add)
 
-            apr = addon['atom_pos'].copy()
-            smilesr = addon['smiles']
-            sm = smiles0[0:ap0[target_point, 0]] + smilesr[apr[0, 0]:(apr[0, 1] + 1)] + '(' + \
-                smilesr[(apr[0, 1] + 1):len(smilesr)] + ')' + \
-                smiles0[(1 + ap0[target_point, 1]):len(smiles0)]
-            s1 = ap0[range(target_point), :].copy()
-            s2 = ap0[target_point + 1:, :].copy()
-            s2 -= (ap0[target_point, 1] - ap0[target_point, 0] + 1)
-            ls1 = len(smiles0[0:(ap0[target_point, 0])])
-            lapr = len(smilesr)
-            apr[1:, :] = apr[1:, :] + 1
-            ap = np.vstack([s1, apr[0, :] + ls1, s2 + 2 + lapr, apr[1:, :] + ls1])
+            poih_add = [i for i in poih_add.tolist() if i != target_point]
+            poih_add += [num_atom1 + i for i in addon['poih'] if i != 0]
+            if 0 in addon['poih']:
+                poih_add.append(target_point)
+            poih_add = np.asarray(poih_add)
 
-            # Check for empty () in smiles
-            token = '\(\)'
-            s1 = re.finditer(token, sm)
-            for p in s1:
-                sm = sm[0:p.start()] + sm[p.end():]
-                for t in range(np.shape(ap)[0]):
-                    if ap[t, 0] >= p.end():
-                        ap[t, ] -= 2
-
-            poi = poia
-            np.delete(poi, np.where(poi == target_point))  # poi[poi == inva[i]] = []
-            # TODO исключение инсертнутого атома из списка, если он в {} или
-            tmp_poia = addon['poia'][np.where(addon['poia'] > 0)].copy()  # Исключаем "воткнутый" атом
-            tmp_poih = addon['poih'].copy()
-            tmp_poih[np.where(addon['poia'] == 0)] = target_point
-            tmp_poih[np.where(addon['poia'] > 0)] += ap0.shape[0]
-            tmp_poia += ap0.shape[0]
-            poia_add = np.hstack([poia_add, tmp_poia])
-            poih_add = np.hstack([poih_add, tmp_poih])
-            poia = np.delete(poia, np.where(poia == target_point))
-            poih = np.delete(poih, np.where(poih == target_point))
-            index = np.argsort(ap[:, 0])
-            ap = ap[index, :]
-            a = a[index]
-            g = g[index, :]
-            g = g[:, index]
-            gh = gh[index, :]
-
-            poia = np.array([p for p in range(len(index))
-                             for r in range(len(poia)) if poia[r] == index[p]])
-            poih = np.array([p for p in range(len(index))
-                             for r in range(len(poih)) if poih[r] == index[p]])
-            poia_add = np.array([p for p in range(len(index))
-                                 for r in range(len(poia_add))
-                                 if poia_add[r] == index[p]])
-            poih_add = np.array([p for p in range(len(index))
-                                 for r in range(len(poih_add))
-                                 if poih_add[r] == index[p]])
-
+            poia = np.delete(poia, np.where(poia == target_point), None)
+            poih = np.delete(poih, np.where(poia == target_point), None)
             hist.append('i-' + str(target_point) + '-' + addon['name'])
-            ghs = np.sum(gh, 1)
-            gh = np.zeros(np.shape(gh), dtype=int)
-            off = 0L
-            for k in range(len(ghs)):
-                gh[k, range(off, (off + ghs[k]))] = 1
-                off = off + ghs[k]
-            mol_out = Molecule({'g': g, 'gh': gh, 'atom': a, 'atom_pos': ap,
-                                'chiral_tags': chiral_tags, 'charge': chaarge, 'poia': poia,
-                                'poih': poih, 'poia_add': poia_add, 'poih_add': poih_add,
-                                'smiles': sm, 'history': hist})
+            mol_out = Molecule({'poia': poia, 'poih': poih, 'poia_add': poia_add,
+                                'poih_add': poih_add, 'smiles': Chem.MolToSmiles(outmol),
+                                'history': hist, 'rdkit_mol': outmol})
+
             mols_with_inserts.append(mol_out)
     return mols_with_inserts

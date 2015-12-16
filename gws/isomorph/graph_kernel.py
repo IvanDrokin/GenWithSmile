@@ -2,14 +2,14 @@ import numpy as np
 from eden.graph import Vectorizer
 from sklearn import metrics
 from scipy.sparse import vstack
-from internal import mol2nxgraph
+from internal import rdkitmol2graph
 
 
 def graph_kernel(mol_list, mol_test, gk_param):
     vectorizer = Vectorizer(complexity=gk_param['complexity'], r=gk_param['r'], d=gk_param['d'],
                             min_r=gk_param['min_r'], min_d=gk_param['min_d'],
                             nbits=gk_param['nbits'])
-    graphs_list = (mol2nxgraph(mol.g, mol.atom) for mol in mol_test)
+    graphs_list = (rdkitmol2graph(mol.rdkit_mol) for mol in mol_test)
 
     if not mol_list:
         mol_feat_list = vectorizer.transform(graphs_list)

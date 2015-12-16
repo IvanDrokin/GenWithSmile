@@ -1,22 +1,9 @@
 # coding=utf-8
-from rdkit import Chem
-
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
+import numpy as np
 
 
-def graphs_isomorph_atom(adj1, adj2, atom1, atom2):
-    """
-    adj1: матрица смежности первого графа
-    adj2: матрица смежности второго графа
-    atom1: метки вершин первого графа (символы элементов)
-    atom2: метки вершин второго графа (символы элементов)
-
-    return: True если графы изоморфны с учётом типов связей и атомов, иначе False
-    """
-    return is_isomorph_nx(mol2nxgraph(adj1, atom1), mol2nxgraph(adj2, atom2))
-
-    
 def is_isomorph_nx(graph1, graph2):
     """
     graph1, graph2: графы в формате networkx, изоморфность которых проверяется
@@ -26,29 +13,55 @@ def is_isomorph_nx(graph1, graph2):
     node_match = iso.categorical_node_match('label', 'C')
     edge_match = iso.categorical_edge_match(['weight', 'label'], [1, '-'])
     if is_iso:
-        return iso.is_isomorphic(graph1, graph2, 
+        return iso.is_isomorphic(graph1, graph2,
                                  node_match=node_match, edge_match=edge_match)
     return False
 
 
-def mol2nxgraph(adjacency_matrix, atom_symbols):
-    """
-    adjacency_matrix: матрица смежности
-    atom_symbols: список имён атомов для меток вершин графа
+def get_list_of_smiles(mol_tmp):
+    smiles = []
+    for mol in mol_tmp:
+        smiles.append(mol.smiles)
+    return smiles
 
-    return: граф в формате библиотеки networkx, соответствующий переданной 
-            матрице смежности, в котором вершинам и рёбрам заданы 
-            соответствующие метки
+
+def rdkitmol2graph(mol):
     """
+    Преобразование молекулы в граф
+    :param mol: rdkit.Chem.rdchem.Mol
+    :return: networkx.Graph
+    """
+    mol_atoms = mol.GetAtoms()
+
+    rings = mol.GetRingInfo()
+    num_rings = len(rings.BondRings())
+    # fast hack for cacl parameters with rdkit
+    charge = np.array([atom_.GetFormalCharge() for atom_ in mol_atoms] + [0]*num_rings)
+    atom = np.array([atom_.GetSymbol() for atom_ in mol_atoms] + ['R']*num_rings)
+    bond = np.array([[bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1, int(bond.GetBondType())]
+                     for bond in mol.GetBonds()])
+    num_vertex = np.amax(bond[:, [0, 1]])
+    gr = np.zeros((num_vertex+num_rings, num_vertex+num_rings), dtype=int)
+
+    bond[:, [0, 1]] = bond[:, [0, 1]] - 1
+    for i in range(bond.shape[0]):
+        gr[bond[i, 0], bond[i, 1]] = bond[i, 2]
+
+    gr = gr + gr.transpose()
+
+    for k, ring in enumerate(rings.AtomRings()):
+        gr[ring, num_vertex + k] = 13
+        gr[num_vertex + k, ring] = 13
+
     graph = nx.Graph()
-    for i, symbol in enumerate(atom_symbols):
-        graph.add_node(i, label=symbol)
-    
-    edge_type_to_label = {1: '-', 2: '=', 3: '#', 12: '||'}
-    n = len(atom_symbols)
+    for i, symbol in enumerate(atom):
+        graph.add_node(i, label=symbol, entity=charge[i])
+
+    edge_type_to_label = {1: '-', 2: '=', 3: '#', 12: '||', 13: 'RING'}
+    n = len(atom)
     for i in range(n):
         for j in range(i+1, n):
-            edge_type = adjacency_matrix[i, j]
+            edge_type = gr[i, j]
             if edge_type == 0:
                 continue  # нет ребра
 
@@ -56,17 +69,3 @@ def mol2nxgraph(adjacency_matrix, atom_symbols):
             graph.add_edge(i, j, weight=edge_type, label=label)
 
     return graph
-
-
-def get_list_of_smiles(mol_tmp):
-    smiles = []
-    for mol in mol_tmp:
-        rdkit_mol = Chem.MolFromSmiles(mol.smiles)
-        chiral_type_by_index = {0: Chem.rdchem.ChiralType.CHI_UNSPECIFIED,
-                                1: Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CW,
-                                2: Chem.rdchem.ChiralType.CHI_TETRAHEDRAL_CCW,
-                                3: Chem.rdchem.ChiralType.CHI_OTHER}
-        for (j, atom) in enumerate(rdkit_mol.GetAtoms()):
-            atom.SetChiralTag(chiral_type_by_index.get(mol.chiral_tags[j]))
-        smiles.append(Chem.MolToSmiles(rdkit_mol, rootedAtAtom=0, isomericSmiles=True))
-    return smiles

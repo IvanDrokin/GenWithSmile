@@ -35,23 +35,21 @@ def smiles2graph(star_smiles_parser):
             smiles_string_tmp[(ap[i, 1] + 1):]
 
     if star_smiles_parser.attach_bonds:
-        attachs = []
-        for (ind, bond) in star_smiles_parser.attach_bonds:
-            atom_index = _get_interest_atom_indexes(ap, [ind])[0]
-            poia = _get_interest_atom_indexes(ap, star_smiles_parser.insert_positions)
-            poih = _get_interest_atom_indexes(ap, star_smiles_parser.attach_positions)
+        inds, bonds = zip(*star_smiles_parser.attach_bonds)
+        atom_index = _get_interest_atom_indexes(ap, inds,)
+        poia = _get_interest_atom_indexes(ap, star_smiles_parser.insert_positions)
+        poih = _get_interest_atom_indexes(ap, star_smiles_parser.attach_positions)
 
-            bond_multiplexity = {'-': 1, '=': 2, '#': 3}
+        bond_multiplexity = {'-': 1, '=': 2, '#': 3}
+        bonds = [bond_multiplexity[i] for i in bonds]
+        new_molec = {'poia': poia, 'poih': poih,
+                     'smiles': star_smiles_parser.smiles,
+                     'poia_add': np.array([], dtype=int), 'poih_add': np.array([], dtype=int),
+                     'history': [], 'rdkit_mol': mol,
+                     'attach_index': atom_index, 'bond': bonds,
+                     'name': '', 'poif': None}
 
-            new_molec = {'poia': poia, 'poih': poih,
-                         'smiles': star_smiles_parser.smiles,
-                         'poia_add': np.array([], dtype=int), 'poih_add': np.array([], dtype=int),
-                         'history': [], 'rdkit_mol': mol,
-                         'attach_index': atom_index, 'bound': bond_multiplexity[bond],
-                         'name': str(ind) + bond}
-
-            attachs.append(new_molec)
-        return attachs
+        return new_molec
 
     ap = np.zeros((len(atom), 2), dtype=int)
     smiles_string_tmp = smiles_no_chiral.lower()
@@ -70,10 +68,11 @@ def smiles2graph(star_smiles_parser):
 
     poia = _get_interest_atom_indexes(ap, star_smiles_parser.insert_positions)
     poih = _get_interest_atom_indexes(ap, star_smiles_parser.attach_positions)
+    poif = _get_interest_atom_indexes(ap, star_smiles_parser.fragment_pos)
 
     return {'poia': poia, 'poih': poih, 'smiles': smiles_no_chiral,
             'poia_add': np.array([], dtype=int), 'poih_add': np.array([], dtype=int),
-            'history': [], 'rdkit_mol': mol}
+            'history': [], 'rdkit_mol': mol, 'name': '', 'poif': poif}
 
 
 def _get_interest_atom_indexes(all_atom_positions, positions):

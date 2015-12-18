@@ -14,6 +14,7 @@ class Molecule:
         self._raw_mol = raw_mol
         self.poia = self._raw_mol['poia']
         self.poih = self._raw_mol['poih']
+        self.poif = self._raw_mol['poif']
         self.poia_add = self._raw_mol['poia_add']
         self.poih_add = self._raw_mol['poih_add']
         self.smiles = self._raw_mol['smiles']

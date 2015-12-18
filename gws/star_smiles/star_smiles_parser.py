@@ -41,11 +41,11 @@ class StarSmilesParser(object):
 
         self.process_tokens()
         (self.smiles, self.insert_positions,
-         self.attach_positions, self.attach_bonds) = self.process_parsed_data()
+         self.attach_positions, self.attach_bonds, self.fragment_pos) = self.process_parsed_data()
 
     @staticmethod
-    def process_ss_part(ss_part, insert_pos, attach_pos, attach_bonds, smiles_parts, smiles_length,
-                        position_flag=None, all_atoms_flagged=False):
+    def process_ss_part(ss_part, insert_pos, attach_pos, attach_bonds, fragment_pos, smiles_parts,
+                        smiles_length, position_flag=None, all_atoms_flagged=False):
         smiles_parts.append(ss_part.smiles)
         smiles_length += len(ss_part.smiles)
         if ss_part.bond_marks:
@@ -60,6 +60,9 @@ class StarSmilesParser(object):
             attach_pos.extend(positions)
         if position_flag in (PositionFlag.both, PositionFlag.insert):
             insert_pos.extend(positions)
+        if position_flag == PositionFlag.fragment:
+            fragment_pos.extend(positions)
+
         return smiles_length
 
     def process_parsed_data(self):
@@ -67,18 +70,21 @@ class StarSmilesParser(object):
         smiles_length = 0
         insert_pos = []
         attach_pos = []
+        fragment_pos = []
         attach_bonds = []
         for data in self.parsed_data:
             if type(data) is StarSmilesPart:
                 smiles_length = self.process_ss_part(
-                    data, insert_pos, attach_pos, attach_bonds, smiles_parts, smiles_length)
+                    data, insert_pos, attach_pos, attach_bonds, fragment_pos,
+                    smiles_parts, smiles_length)
             elif type(data) is StarSmilesBlock:
                 pos_flag = data.position_flag
                 for ss_part in data.data:
                     smiles_length = self.process_ss_part(
-                        ss_part, insert_pos, attach_pos, attach_bonds, smiles_parts, smiles_length,
+                        ss_part, insert_pos, attach_pos, attach_bonds, fragment_pos,
+                        smiles_parts, smiles_length,
                         position_flag=pos_flag, all_atoms_flagged=True)
-        return ''.join(smiles_parts), insert_pos, attach_pos, attach_bonds
+        return ''.join(smiles_parts), insert_pos, attach_pos, attach_bonds, fragment_pos
 
     def process_tokens(self):
         self.parse_star_smiles()
@@ -107,6 +113,14 @@ class StarSmilesParser(object):
                     'На позиции {}: три * на блоке можно не указывать. '
                     'Это поведение по умолчанию'.format(token.position))
             positions_flag = self._stars_to_position_flag(token)
+        elif token.type == StarSmilesTokens.roof:
+            next(self.tokens)  # skip stars
+            roof_count = len(token.data)
+            if roof_count > 1:
+                raise StarSmilesFormatError(
+                    StarSmilesTokens.stars, StarSmilesTokens.stars, token.position,
+                    'Не допускается больше одного ^ у блока')
+            positions_flag = self._roofs_to_position_flag(token)
         else:
             positions_flag = PositionFlag.both
         self.parsed_data.append(StarSmilesBlock(self.block_smiles_data, positions_flag))
@@ -185,6 +199,18 @@ class StarSmilesParser(object):
                 return
             self.parsed_data.append(StarSmilesPart(text_token.data, position_flag=position_flag))
             return
+        if self.tokens.peek().type == StarSmilesTokens.roof:
+            roof_token = next(self.tokens)
+            position_flag = self._roofs_to_position_flag(roof_token)
+            if self.tokens.peek().type == StarSmilesTokens.open_bond_bracket:
+                bond_type = self.parse_bond_marks()
+                self.parsed_data.append(
+                    StarSmilesPart(text_token.data,
+                                   bond_marks=bond_type,
+                                   position_flag=position_flag))
+                return
+            self.parsed_data.append(StarSmilesPart(text_token.data, position_flag=position_flag))
+            return
         self.parsed_data.append(StarSmilesPart(text_token.data))
 
     def assert_token(self, token_type, message):
@@ -211,3 +237,13 @@ class StarSmilesParser(object):
         if stars_count == 2:
             return PositionFlag.insert
         return PositionFlag.attach
+
+    @staticmethod
+    def _roofs_to_position_flag(roof_token):
+        assert len(roof_token.data) == roof_token.data.count('^')
+        roof_count = len(roof_token.data)
+        if roof_count > 1:
+            raise StarSmilesFormatError(
+                StarSmilesTokens.stars, StarSmilesTokens.stars, roof_token.position,
+                'Не допускается больше одного ^ у блока')
+        return PositionFlag.fragment

@@ -7,6 +7,7 @@ from rdkit import Chem
 from itertools import izip
 from collections import namedtuple
 from gws.io.smiles2graph import smiles2graph
+from gws.isomorph.symmetric import get_filtered_addons
 from gws.star_smiles.parser_exceptions import StarSmilesFormatError
 from gws.star_smiles.star_smiles_parser import StarSmilesParser
 
@@ -40,10 +41,29 @@ def data_prep_addons(adds):
     """
     TODO docs
     """
-    smiles_replaces = adds['insert']
-    smiles_appenders = adds['attach']
-    names_replaces = adds['names_in']
-    names_appenders = adds['names_at']
+    if 'attach' in adds:
+        smiles_appenders = adds['attach']
+        names_appenders = adds['names_at']
+        if 'two_points' in adds:
+            attach_type_flags = adds['two_points']
+        else:
+            attach_type_flags = [False]*len(smiles_appenders)
+    else:
+        smiles_appenders, names_appenders, attach_type_flags = [], [], []
+    if 'insert' in adds:
+        smiles_replaces = adds['insert']
+        names_replaces = adds['names_in']
+    else:
+        smiles_replaces, names_replaces = [], []
+    if 'fragment' in adds:
+        smiles_fragments = adds['fragment']
+        names_fragments = adds['name_fr']
+        if 'bond_fragment' in adds:
+            bond_fragment = adds['bond_fragment']
+        else:
+            bond_fragment = [[1]]*len(smiles_fragments)
+    else:
+        smiles_fragments, names_fragments, bond_fragment = [], [], []
 
     mol_replaces = []
     for smiles, name in izip(smiles_replaces, names_replaces):
@@ -52,18 +72,27 @@ def data_prep_addons(adds):
         mol_replaces.append(mol)
 
     mol_appenders = []
-    for app_smiles, name in izip(smiles_appenders, names_appenders):
 
-        mols = star_smiles_to_mol(app_smiles)
-        for m in mols:
-            m['name'] += name
-        mol_appenders += mols
+    for app_smiles, name, flag in izip(smiles_appenders, names_appenders, attach_type_flags):
 
-    # TODO: filter attaches and inserts
+        mol = star_smiles_to_mol(app_smiles)
+        mol['name'] += name
+        mol['attach_type'] = flag
+        mol_appenders.append(mol)
+
+    mol_fragments = []
+    for app_smiles, name, bond in izip(smiles_fragments, names_fragments, bond_fragment):
+        mol = star_smiles_to_mol(app_smiles)
+        mol['name'] += name
+        mol['bonds'] = bond
+        mol_fragments.append(mol)
+
+    mol_appenders, mol_fragments = get_filtered_addons(mol_appenders, mol_fragments)
 
     return {
-        'insert': mol_replaces, 
-        'attach': mol_appenders
+        'insert': mol_replaces,
+        'attach': mol_appenders,
+        'fragment': mol_fragments
     }
 
 
@@ -197,6 +226,7 @@ def single_atom_to_graph(atom):
     mol_data = {
         'poia': np.array([0]),
         'poih': np.array([0]),
+        'poif': None,
         'smiles': atom.smiles,
         'aroma_atoms': np.array([0]),
         'rdkit_mol': Chem.MolFromSmiles(atom.smiles)

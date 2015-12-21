@@ -267,6 +267,8 @@ def get_mols_with_fragments(target_point, mol0, fragments):
         vals.append(atom.GetTotalValence() - atom.GetExplicitValence() +
                     int(rdkit_mol0.GetBondBetweenAtoms(target_point, atom.GetIdx()).GetBondType()))
     vals = np.asarray(vals)
+    bonds = [int(rdkit_mol0.GetBondBetweenAtoms(target_point, a.GetIdx()).GetBondType())
+             for a in rdkit_mol0.GetAtomWithIdx(target_point).GetNeighbors()]
     for fragment in fragments:
         if len(neighbors) not in fragment['points']:
             continue
@@ -283,8 +285,7 @@ def get_mols_with_fragments(target_point, mol0, fragments):
         #                     is_ok = False
         #             if not ((vals >= np.asarray(bonds)).all() and is_ok):
         #                 continue
-        for indexes, bonds in zip(fragment['points'][len(neighbors)]['index'],
-                                  fragment['points'][len(neighbors)]['bond']):
+        for indexes in fragment['points'][len(neighbors)]['index']:
             is_ok = True
             for index, bond in itertools.izip(indexes, bonds):
                 _atom = fragment['rdkit_mol'].GetAtomWithIdx(index)

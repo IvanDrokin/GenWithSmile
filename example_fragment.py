@@ -63,15 +63,14 @@ def main():
 
     Замена атома во фрейме на фрагмент выполняется полным перебором всевозможных вариантов
     присоединения связей, идущих к заменяемому атому, к фрагменту.
-    Пример фрагмента: {'fragment': ['{c1ccccc1}'], 'name_fr': ['ar'], 'bond_fragment': [[1, 2]]}
-    bond_fragment - типы связей, которыми присоединяется фрагмент к молекуле.
+    Пример фрагмента: {'fragment': ['{c1ccccc1}'], 'name_fr': ['ar']}
     """
 
     # Исходная молекула ы формате star_smiles
     start_star_smiles = 'O=CC^NCO'
 
     # Набор аддонов
-    addons_data = {'fragment': ['{c1ccccc1}'], 'name_fr': ['ar'], 'bond_fragment': [[1, 2]]}
+    addons_data = {'fragment': ['{c1ccccc1}'], 'name_fr': ['ar']}
 
     # Преобразование star-smiles в молекулу
     frame = molecule_from_star_smiles(start_star_smiles)

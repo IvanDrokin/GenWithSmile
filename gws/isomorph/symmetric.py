@@ -91,29 +91,26 @@ def get_filtered_addons(mol_appenders, mol_fragments):
         mol_copy = mol.copy()
         graph = rdkitmol2graph(mol['rdkit_mol'])
         atom_idexes = [i for i in xrange(len(mol['rdkit_mol'].GetAtoms()))]
-        bonds = mol['bonds']
 
         # now generate sets of points for 2, 3 and 4 branches
         points = {}
         cur_arom_index = [atom_idexes]
-        cur_bonds = [bonds]
-        allowed_bond_mult = [2]
+        allowed_bond_mult = [2, 3]
         for k in allowed_bond_mult:
+            bonds = ['BOND_' + _int_to_str[i] for i in xrange(1, k+1)]
             label = ['LABEL_' + _int_to_str[i] for i in xrange(1, k+1)]
             node_index, edje_w, node_label = [], [], []
-            for _a in product(*(cur_arom_index + [atom_idexes] + cur_bonds + [bonds])):
+            for _a in product(*(cur_arom_index + [atom_idexes])):
                 ind_list = [_a[i] for i in xrange(k)]
                 if len(set(ind_list)) == len(ind_list):
                     node_index.append(ind_list)
-                    edje_w.append([_a[k + i] for i in xrange(k)])
+                    edje_w.append(bonds)
                     node_label.append(label)
             positions = _get_nonisomorphic_positions(graph, add_vertexes,
                                                      zip(node_index, node_label, edje_w))
             points[k] = {}
-            points[k]['bond'] = [edje_w[i] for i in positions]
             points[k]['index'] = [node_index[i] for i in positions]
             cur_arom_index = points[k]['index']
-            cur_bonds = points[k]['bond']
         mol_copy['points'] = points
         mol_fragments_out.append(mol_copy)
     return mol_appenders_out, mol_fragments_out

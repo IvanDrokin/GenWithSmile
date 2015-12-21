@@ -58,12 +58,8 @@ def data_prep_addons(adds):
     if 'fragment' in adds:
         smiles_fragments = adds['fragment']
         names_fragments = adds['name_fr']
-        if 'bond_fragment' in adds:
-            bond_fragment = adds['bond_fragment']
-        else:
-            bond_fragment = [[1]]*len(smiles_fragments)
     else:
-        smiles_fragments, names_fragments, bond_fragment = [], [], []
+        smiles_fragments, names_fragments = [], []
 
     mol_replaces = []
     for smiles, name in izip(smiles_replaces, names_replaces):
@@ -81,10 +77,9 @@ def data_prep_addons(adds):
         mol_appenders.append(mol)
 
     mol_fragments = []
-    for app_smiles, name, bond in izip(smiles_fragments, names_fragments, bond_fragment):
+    for app_smiles, name in izip(smiles_fragments, names_fragments):
         mol = star_smiles_to_mol(app_smiles)
         mol['name'] += name
-        mol['bonds'] = bond
         mol_fragments.append(mol)
 
     mol_appenders, mol_fragments = get_filtered_addons(mol_appenders, mol_fragments)

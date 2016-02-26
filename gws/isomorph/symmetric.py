@@ -86,26 +86,28 @@ def get_filtered_addons(mol_appenders, mol_fragments):
         mol_appenders_out.append(mol_copy)
 
     # filter fragments
-    _int_to_str = {1: 'ONE', 2: 'TWO', 3: 'THREE', 4: 'FOUR'}
+    _int_to_str = {1: 'ONE', 2: 'TWO', 3: 'THREE', 4: 'FOUR', 5: 'FIVE'}
     for mol in mol_fragments:
         mol_copy = mol.copy()
         graph = rdkitmol2graph(mol['rdkit_mol'])
         atom_idexes = [i for i in xrange(len(mol['rdkit_mol'].GetAtoms()))]
-
         # now generate sets of points for 2, 3 and 4 branches
         points = {}
         cur_arom_index = [atom_idexes]
-        allowed_bond_mult = [2, 3]
+        allowed_bond_mult = [1, 2, 3, 4]
         for k in allowed_bond_mult:
             bonds = ['BOND_' + _int_to_str[i] for i in xrange(1, k+1)]
             label = ['LABEL_' + _int_to_str[i] for i in xrange(1, k+1)]
             node_index, edje_w, node_label = [], [], []
-            for _a in product(*(cur_arom_index + [atom_idexes])):
-                ind_list = [_a[i] for i in xrange(k)]
-                if len(set(ind_list)) == len(ind_list):
-                    node_index.append(ind_list)
-                    edje_w.append(bonds)
-                    node_label.append(label)
+            for cur_p in cur_arom_index:
+                for add_index in atom_idexes:
+                    _a = cur_p + [add_index]
+                    ind_list = [_a[i] for i in xrange(k)]
+                    if len(set(ind_list)) == len(ind_list):
+                        if sorted(ind_list) not in node_index:
+                            node_index.append(ind_list)
+                            edje_w.append(bonds)
+                            node_label.append(label)
             positions = _get_nonisomorphic_positions(graph, add_vertexes,
                                                      zip(node_index, node_label, edje_w))
             points[k] = {}
